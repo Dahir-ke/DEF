@@ -3,376 +3,393 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import warnings
 warnings.filterwarnings('ignore')
 
-# ------------------------------------------------------------
-# PAGE CONFIGURATION
-# ------------------------------------------------------------
-st.set_page_config(
-    page_title="Healthcare Intelligence",
-    page_icon="🏥",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# ============================================
+# PAGE CONFIG
+# ============================================
+st.set_page_config(page_title="Healthcare Claims Analytics", page_icon="🏥", layout="wide")
 
-# ------------------------------------------------------------
-# CUSTOM CSS – Clean, modern, no white-on-white issues
-# ------------------------------------------------------------
+# ============================================
+# CUSTOM CSS (unchanged)
+# ============================================
 st.markdown("""
 <style>
-    /* Main background – soft gradient */
-    .stApp {
-        background: linear-gradient(135deg, #e6f0f5 0%, #d4e2ed 100%);
-    }
-    /* Title bar */
-    .hero {
-        background: linear-gradient(90deg, #0b3b4f 0%, #1c6e8f 100%);
-        padding: 1.5rem;
-        border-radius: 20px;
-        margin-bottom: 2rem;
+    .stApp { background-color: #f5f9fc; }
+    .css-1d391kg { background-color: #ffffff; border-right: 1px solid #e0e7ed; }
+    .kpi-card {
+        background: white; border-radius: 16px; padding: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #e9ecef;
         text-align: center;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-    .hero h1, .hero p {
-        color: white;
-        margin: 0;
-    }
-    .hero h1 { font-size: 2rem; }
-    /* KPI cards */
-    .kpi {
-        background: white;
-        border-radius: 16px;
-        padding: 1rem;
-        text-align: center;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-        transition: 0.2s;
-        border: 1px solid #e2e8f0;
-    }
-    .kpi:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .kpi-number { font-size: 2rem; font-weight: 700; color: #0b3b4f; }
-    .kpi-label { font-size: 0.8rem; font-weight: 600; color: #4f7a9e; text-transform: uppercase; }
-    /* Insight cards */
-    .insight {
-        background: white;
-        border-radius: 16px;
-        padding: 1.2rem;
-        margin: 1rem 0;
-        border-left: 5px solid #1c6e8f;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        color: #1e2a3a;
-    }
-    .insight b { color: #0b3b4f; }
-    /* Tabs */
+    .kpi-label { font-size: 0.85rem; font-weight: 500; color: #5a6e7c; letter-spacing: 0.5px; }
+    .kpi-value { font-size: 1.9rem; font-weight: 700; color: #1f3b4c; line-height: 1.2; }
+    .kpi-delta { font-size: 0.85rem; margin-top: 4px; }
+    .kpi-unit { font-size: 0.85rem; color: #7c8f9c; }
+    h1, h2, h3 { color: #1a4a6e; font-weight: 600; }
     .stTabs [data-baseweb="tab-list"] {
-        gap: 0.5rem;
-        background: white;
-        padding: 0.5rem;
-        border-radius: 40px;
-        margin-bottom: 1rem;
+        gap: 0.5rem; background-color: white; padding: 0.5rem 1rem;
+        border-radius: 40px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     .stTabs [data-baseweb="tab"] {
-        border-radius: 30px;
-        padding: 0.5rem 1.5rem;
-        font-weight: 500;
-        background: #eef2f7;
-        color: #0b3b4f;
+        border-radius: 30px; padding: 0.5rem 1.2rem; font-weight: 500;
+        color: #2c5a7a; background-color: #f0f4f8;
     }
-    .stTabs [aria-selected="true"] {
-        background: #1c6e8f;
-        color: white;
+    .stTabs [aria-selected="true"] { background-color: #1a6f8c; color: white; }
+    .stDataFrame { border-radius: 12px; overflow: hidden; }
+    .login-container {
+        max-width: 400px;
+        margin: 8rem auto;
+        padding: 2rem;
+        background: white;
+        border-radius: 24px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        border: 1px solid #e2e8f0;
     }
-    hr { margin: 1rem 0; border-color: #cbd5e1; }
+    .login-title {
+        text-align: center;
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #1a4a6e;
+        margin-bottom: 1.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# ------------------------------------------------------------
-# DATA LOADING (cached)
-# ------------------------------------------------------------
+# ============================================
+# LOGIN / AUTHENTICATION
+# ============================================
+def login():
+    """Display login form and return True if credentials are correct."""
+    with st.container():
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
+        st.markdown('<div class="login-title">🏥 Healthcare Claims Dashboard</div>', unsafe_allow_html=True)
+        username = st.text_input("Username", placeholder="Enter your username")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            login_btn = st.button("🔐 Login", use_container_width=True)
+        if login_btn:
+            if username == "DEFMIS" and password == "2026":
+                st.session_state["authenticated"] = True
+                st.session_state["username"] = username
+                st.rerun()
+            else:
+                st.error("Invalid username or password. Please try again.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    login()
+    st.stop()  # Do not load data or dashboard until logged in
+
+# ============================================
+# DATA LOADING (only after successful login)
+# ============================================
+DATA_PATH = "data/visits for an-april-2026.xlsx"
+
 @st.cache_data
-def load_and_clean(filepath):
+def load_data(filepath):
     df = pd.read_excel(filepath)
     df.columns = df.columns.str.strip()
     
     required = ['CLAIM ID', 'MEMBER NUMBER', 'PATIENT NAME', 'SERVICE TYPE',
-                'BENEFIT DESC', 'MAIN HOSPITAL', 'AMOUNT', 'ARRIVAL DATE', 'TRANSACTION DATE']
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        st.error(f"Missing columns: {missing}")
-        st.stop()
+                'BENEFIT DESC', 'MAIN HOSPITAL', 'AMOUNT', 'ARRIVAL DATE', 
+                'TRANSACTION DATE', 'DOB']
+    for col in required:
+        if col not in df.columns:
+            st.error(f"Missing column: {col}")
+            st.stop()
     
     df['ARRIVAL DATE'] = pd.to_datetime(df['ARRIVAL DATE'], errors='coerce')
     df['TRANSACTION DATE'] = pd.to_datetime(df['TRANSACTION DATE'], errors='coerce')
+    df['DOB'] = pd.to_datetime(df['DOB'], errors='coerce')
     df['AMOUNT'] = pd.to_numeric(df['AMOUNT'], errors='coerce')
-    df = df.dropna(subset=['AMOUNT', 'ARRIVAL DATE', 'MEMBER NUMBER', 'BENEFIT DESC', 'MAIN HOSPITAL'])
     
-    # Unique visit key
+    df = df.dropna(subset=['AMOUNT', 'ARRIVAL DATE', 'MEMBER NUMBER'])
+    
     df['VISIT_KEY'] = (df['MEMBER NUMBER'].astype(str) + '_' +
                        df['ARRIVAL DATE'].dt.strftime('%Y-%m-%d') + '_' +
                        df['SERVICE TYPE'].astype(str))
+    
+    df['AGE_AT_VISIT'] = (df['ARRIVAL DATE'] - df['DOB']).dt.days // 365
+    df['AGE_AT_VISIT'] = df['AGE_AT_VISIT'].clip(0, 120)
     return df
 
-DATA_PATH = "data/visits for an-april-2026.xlsx"
 try:
-    df = load_and_clean(DATA_PATH)
-    st.sidebar.success(f"✅ Loaded {df.shape[0]:,} rows")
+    df = load_data(DATA_PATH)
 except Exception as e:
-    st.error(f"Could not load data: {e}\nCheck path: {DATA_PATH}")
+    st.error(f"Failed to load data: {e}")
     st.stop()
 
-# ------------------------------------------------------------
-# SIDEBAR FILTERS (interactive)
-# ------------------------------------------------------------
-st.sidebar.title("🔍 Filter dashboard")
-date_min = df['TRANSACTION DATE'].min().date()
-date_max = df['TRANSACTION DATE'].max().date()
-date_range = st.sidebar.date_input("Date range", [date_min, date_max], min_value=date_min, max_value=date_max)
+# ============================================
+# DASHBOARD (with comma formatting)
+# ============================================
+
+with st.sidebar:
+    st.markdown(f"**👋 Logged in as:** {st.session_state.get('username', 'DEFMIS')}")
+    if st.button("🚪 Logout"):
+        st.session_state["authenticated"] = False
+        st.rerun()
+    st.markdown("---")
+
+# ============================================
+# SIDEBAR FILTERS
+# ============================================
+st.sidebar.title("🎛️ Dashboard Filters")
+min_date = df['TRANSACTION DATE'].min().date()
+max_date = df['TRANSACTION DATE'].max().date()
+date_range = st.sidebar.date_input("Transaction Date Range", [min_date, max_date],
+                                    min_value=min_date, max_value=max_date)
+all_services = df['SERVICE TYPE'].dropna().unique().tolist()
+selected_services = st.sidebar.multiselect("Service Type", all_services, default=all_services)
+all_hospitals = df['MAIN HOSPITAL'].dropna().unique().tolist()
+selected_hospitals = st.sidebar.multiselect("Hospital (optional)", all_hospitals, default=[])
+
+df_filtered = df.copy()
 if len(date_range) == 2:
     start, end = date_range
-    df = df[(df['TRANSACTION DATE'].dt.date >= start) & (df['TRANSACTION DATE'].dt.date <= end)]
+    df_filtered = df_filtered[(df_filtered['TRANSACTION DATE'].dt.date >= start) &
+                              (df_filtered['TRANSACTION DATE'].dt.date <= end)]
+if selected_services:
+    df_filtered = df_filtered[df_filtered['SERVICE TYPE'].isin(selected_services)]
+if selected_hospitals:
+    df_filtered = df_filtered[df_filtered['MAIN HOSPITAL'].isin(selected_hospitals)]
+if df_filtered.empty:
+    st.sidebar.warning("No data matches filters. Showing all data.")
+    df_filtered = df.copy()
 
-services = df['SERVICE TYPE'].unique().tolist()
-sel_services = st.sidebar.multiselect("Service type", services, default=services)
-if sel_services:
-    df = df[df['SERVICE TYPE'].isin(sel_services)]
+# ============================================
+# KPIs (with comma formatting)
+# ============================================
+total_cost = df_filtered['AMOUNT'].sum()
+total_claims = df_filtered['CLAIM ID'].nunique()
+total_visits = df_filtered['VISIT_KEY'].nunique()
+ip_amount = df_filtered[df_filtered['SERVICE TYPE'] == 'IP']['AMOUNT'].sum()
+ip_pct = (ip_amount / total_cost * 100) if total_cost > 0 else 0
 
-hospitals = df['MAIN HOSPITAL'].unique().tolist()
-sel_hospitals = st.sidebar.multiselect("Hospital (optional)", hospitals, default=[])
-if sel_hospitals:
-    df = df[df['MAIN HOSPITAL'].isin(sel_hospitals)]
-
-# ------------------------------------------------------------
-# KPIs (top of dashboard)
-# ------------------------------------------------------------
-total_claims = df['CLAIM ID'].nunique()
-total_visits = df['VISIT_KEY'].nunique()
-total_amount = df['AMOUNT'].sum()
-avg_visit_cost = total_amount / total_visits if total_visits else 0
+monthly_total = df_filtered.groupby(df_filtered['TRANSACTION DATE'].dt.to_period('M'))['AMOUNT'].sum()
+if len(monthly_total) >= 2:
+    amount_mom = (monthly_total.iloc[-1] - monthly_total.iloc[-2]) / monthly_total.iloc[-2] * 100
+else:
+    amount_mom = 0
 
 col1, col2, col3, col4 = st.columns(4)
-col1.markdown(f'<div class="kpi"><div class="kpi-number">{total_claims:,}</div><div class="kpi-label">Total claims</div></div>', unsafe_allow_html=True)
-col2.markdown(f'<div class="kpi"><div class="kpi-number">{total_visits:,}</div><div class="kpi-label">Unique visits</div></div>', unsafe_allow_html=True)
-col3.markdown(f'<div class="kpi"><div class="kpi-number">Ksh {total_amount/1e6:.1f}M</div><div class="kpi-label">Total cost</div></div>', unsafe_allow_html=True)
-col4.markdown(f'<div class="kpi"><div class="kpi-number">Ksh {avg_visit_cost:,.0f}</div><div class="kpi-label">Avg cost / visit</div></div>', unsafe_allow_html=True)
+with col1:
+    st.markdown(f"""
+    <div class="kpi-card">
+        <div class="kpi-label">💰 TOTAL CLAIMS VALUE</div>
+        <div class="kpi-value">Ksh {total_cost/1e6:.1f}M</div>
+        <div class="kpi-delta" style="color: {'#2e7d64' if amount_mom >= 0 else '#c73e3e'}">
+            {'▲' if amount_mom >= 0 else '▼'} {abs(amount_mom):.1f}% vs prev month
+        </div>
+        <div class="kpi-unit">{total_cost:,.0f} KES</div>
+    </div>
+    """, unsafe_allow_html=True)
+with col2:
+    st.markdown(f"<div class='kpi-card'><div class='kpi-label'>📄 TOTAL CLAIMS</div><div class='kpi-value'>{total_claims:,}</div></div>", unsafe_allow_html=True)
+with col3:
+    st.markdown(f"<div class='kpi-card'><div class='kpi-label'>👥 UNIQUE VISITS</div><div class='kpi-value'>{total_visits:,}</div></div>", unsafe_allow_html=True)
+with col4:
+    st.markdown(f"<div class='kpi-card'><div class='kpi-label'>🏥 INPATIENT SHARE</div><div class='kpi-value'>{ip_pct:.1f}%</div></div>", unsafe_allow_html=True)
 
 st.markdown("---")
 
-# ------------------------------------------------------------
-# HERO TITLE
-# ------------------------------------------------------------
-st.markdown("""
-<div class="hero">
-    <h1>🏥 Healthcare Intelligence Dashboard</h1>
-    <p>Actionable insights from claims data</p>
-</div>
-""", unsafe_allow_html=True)
-
-# ------------------------------------------------------------
+# ============================================
 # TABS
-# ------------------------------------------------------------
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📋 General view", "🔎 Deep insights", "✨ Attractive visuals", "🏥 Hospital deep dive", "📎 Data & export"
+# ============================================
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📊 Service & Benefit", "🏥 Provider Scorecard", "📈 Monthly Trends",
+    "⚠️ Outlier Detection", "🔍 Member Lookup", "🔄 Retention & Export"
 ])
 
-# ==================== TAB 1: GENERAL VIEW ====================
+# ---------- TAB 1 ----------
 with tab1:
-    st.subheader("What stands out immediately")
-    
-    # Two columns: service pie + monthly line
-    left, right = st.columns(2)
-    with left:
-        service_totals = df.groupby('SERVICE TYPE')['AMOUNT'].sum().reset_index()
-        fig_pie = px.pie(service_totals, names='SERVICE TYPE', values='AMOUNT', hole=0.4,
-                         title="Cost share by service type", color_discrete_sequence=['#1c6e8f', '#4aa3c2'],
-                         template='plotly_white')
-        st.plotly_chart(fig_pie, use_container_width=True)
-    with right:
-        monthly = df.groupby(df['TRANSACTION DATE'].dt.to_period('M'))['AMOUNT'].sum().reset_index()
-        monthly['Month'] = monthly['TRANSACTION DATE'].dt.strftime('%b')
-        fig_line = px.line(monthly, x='Month', y='AMOUNT', markers=True,
-                           title="Monthly cost trend", labels={'AMOUNT': 'Cost (Ksh)'},
-                           color_discrete_sequence=['#1c6e8f'], template='plotly_white')
-        st.plotly_chart(fig_line, use_container_width=True)
-    
-    # Top hospitals bar chart
-    st.subheader("Top 10 hospitals by total cost")
-    top_hosp = df.groupby('MAIN HOSPITAL')['AMOUNT'].sum().reset_index().nlargest(10, 'AMOUNT')
-    fig_bar = px.bar(top_hosp, x='AMOUNT', y='MAIN HOSPITAL', orientation='h',
-                     text=top_hosp['AMOUNT'].apply(lambda x: f'Ksh {x/1e6:.1f}M'),
-                     color='AMOUNT', color_continuous_scale='Blues', template='plotly_white')
-    fig_bar.update_traces(textposition='outside')
-    fig_bar.update_layout(height=450, margin=dict(l=200))
-    st.plotly_chart(fig_bar, use_container_width=True)
-    
-    # Insight summary
-    st.markdown("""
-    <div class="insight">
-        <b>💡 Obvious insights</b><br>
-        • Inpatient (IP) drives most of the cost.<br>
-        • Cost is concentrated in a few hospitals – focus negotiations there.<br>
-        • Monthly peaks may indicate seasonal utilisation or billing cycles.
-    </div>
-    """, unsafe_allow_html=True)
+    st.subheader("Service Type Breakdown")
+    service_agg = df_filtered.groupby('SERVICE TYPE').agg(TOTAL=('AMOUNT', 'sum'), VISITS=('VISIT_KEY', 'nunique')).reset_index()
+    fig1 = px.bar(service_agg, x='SERVICE TYPE', y='TOTAL',
+                  text=service_agg['TOTAL'].apply(lambda x: f'Ksh {x:,.0f}'),
+                  color='TOTAL', color_continuous_scale='Tealgrn')
+    fig1.update_traces(textposition='outside', hovertemplate='Service: %{x}<br>Total: Ksh %{y:,.0f}<extra></extra>')
+    fig1.update_layout(yaxis_tickformat=',.0f')
+    st.plotly_chart(fig1, use_container_width=True)
 
-# ==================== TAB 2: DEEP INSIGHTS ====================
+    st.subheader("Benefit Description Summary")
+    benefit = df_filtered.groupby('BENEFIT DESC').agg(Visits=('VISIT_KEY', 'nunique'), Amount=('AMOUNT', 'sum')).reset_index().sort_values('Amount', ascending=False)
+    benefit['Avg per Visit'] = benefit['Amount'] / benefit['Visits']
+    benefit_display = benefit.copy()
+    benefit_display['Amount'] = benefit_display['Amount'].apply(lambda x: f'Ksh {x:,.0f}')
+    benefit_display['Avg per Visit'] = benefit_display['Avg per Visit'].apply(lambda x: f'Ksh {x:,.0f}')
+    st.dataframe(benefit_display, use_container_width=True, hide_index=True)
+
+# ---------- TAB 2 ----------
 with tab2:
-    st.subheader("Actionable intelligence for management")
-    
-    # Pareto (80/20)
-    benefit_totals = df.groupby('BENEFIT DESC')['AMOUNT'].sum().sort_values(ascending=False)
-    cumsum = benefit_totals.cumsum() / benefit_totals.sum() * 100
-    n_80 = (cumsum <= 80).sum()
-    st.metric("Pareto (80/20)", f"{n_80} benefits account for 80% of total cost")
-    st.write("**Top benefits by cost:**")
-    st.dataframe(benefit_totals.reset_index().head(10).style.format({'AMOUNT': 'Ksh {:,.0f}'}), 
-                 use_container_width=True, hide_index=True)
-    
-    # Cost concentration (top 10% claims)
-    top10pct_amount = df.nlargest(int(len(df)*0.1), 'AMOUNT')['AMOUNT'].sum()
-    concentration = top10pct_amount / total_amount * 100
-    st.metric("Risk concentration", f"Top 10% of claims represent {concentration:.1f}% of total cost")
-    
-    # Most expensive benefits (cost per visit)
-    benefit_cost_per_visit = df.groupby('BENEFIT DESC').agg(
-        Visits=('VISIT_KEY', 'nunique'),
-        Total=('AMOUNT', 'sum')
+    st.subheader("Provider Efficiency Scorecard")
+    provider = df_filtered.groupby('MAIN HOSPITAL').agg(
+        TOTAL_COST=('AMOUNT', 'sum'),
+        UNIQUE_VISITS=('VISIT_KEY', 'nunique'),
+        UNIQUE_PATIENTS=('MEMBER NUMBER', 'nunique')
     ).reset_index()
-    benefit_cost_per_visit['Cost/visit'] = benefit_cost_per_visit['Total'] / benefit_cost_per_visit['Visits']
-    expensive = benefit_cost_per_visit.nlargest(10, 'Cost/visit')
-    st.subheader("💰 Most expensive benefits (average cost per visit)")
-    st.dataframe(expensive[['BENEFIT DESC', 'Cost/visit', 'Visits']].style.format({'Cost/visit': 'Ksh {:,.0f}'}),
-                 use_container_width=True, hide_index=True)
+    provider['COST_PER_VISIT'] = provider['TOTAL_COST'] / provider['UNIQUE_VISITS']
+    provider['COST_PER_PATIENT'] = provider['TOTAL_COST'] / provider['UNIQUE_PATIENTS']
     
-    # Patient switching (first vs last hospital)
     def first_hosp(g): return g.loc[g['ARRIVAL DATE'].idxmin(), 'MAIN HOSPITAL']
     def last_hosp(g): return g.loc[g['ARRIVAL DATE'].idxmax(), 'MAIN HOSPITAL']
-    first = df.groupby('MEMBER NUMBER').apply(first_hosp).reset_index(name='FIRST')
-    last = df.groupby('MEMBER NUMBER').apply(last_hosp).reset_index(name='LAST')
+    first = df_filtered.groupby('MEMBER NUMBER').apply(first_hosp).reset_index(name='FIRST')
+    last = df_filtered.groupby('MEMBER NUMBER').apply(last_hosp).reset_index(name='LAST')
     merged = first.merge(last, on='MEMBER NUMBER')
-    switched = merged[merged['FIRST'] != merged['LAST']]
-    st.metric("Patient churn", f"{len(switched):,} patients switched hospitals ({len(switched)/len(merged)*100:.1f}%)")
+    merged['SWITCHED'] = merged['FIRST'] != merged['LAST']
+    retention = merged.groupby('FIRST').agg(PATIENTS=('MEMBER NUMBER', 'count'), SWITCHED=('SWITCHED', 'sum')).reset_index()
+    retention['RETAINED'] = retention['PATIENTS'] - retention['SWITCHED']
+    retention['RETENTION_RATE'] = retention['RETAINED'] / retention['PATIENTS'] * 100
+    retention.columns = ['MAIN HOSPITAL', 'PATIENTS_STARTED', 'SWITCHED', 'RETAINED', 'RETENTION_RATE']
+    provider = provider.merge(retention[['MAIN HOSPITAL', 'RETENTION_RATE']], on='MAIN HOSPITAL', how='left')
+    provider['RETENTION_RATE'] = provider['RETENTION_RATE'].fillna(100)
     
-    # Hospitals losing most patients
-    loss = switched.groupby('FIRST').size().reset_index(name='Lost').nlargest(10, 'Lost')
-    fig_loss = px.bar(loss, x='Lost', y='FIRST', orientation='h',
-                      title="Hospitals losing most patients", color='Lost', color_continuous_scale='Reds',
-                      template='plotly_white')
-    fig_loss.update_layout(height=400, margin=dict(l=150))
-    st.plotly_chart(fig_loss, use_container_width=True)
+    top_providers = provider.nlargest(15, 'TOTAL_COST')
+    st.dataframe(top_providers[['MAIN HOSPITAL', 'TOTAL_COST', 'UNIQUE_VISITS', 'COST_PER_VISIT',
+                                 'COST_PER_PATIENT', 'RETENTION_RATE']],
+                 use_container_width=True, hide_index=True,
+                 column_config={
+                     'TOTAL_COST': st.column_config.NumberColumn(format="Ksh %.0f"),
+                     'COST_PER_VISIT': st.column_config.NumberColumn(format="Ksh %.0f"),
+                     'COST_PER_PATIENT': st.column_config.NumberColumn(format="Ksh %.0f"),
+                     'RETENTION_RATE': st.column_config.NumberColumn(format="%.1f%%")
+                 })
     
-    # Outlier claims
-    threshold = df['AMOUNT'].quantile(0.99)
-    outliers = df[df['AMOUNT'] >= threshold]
-    st.subheader("⚠️ High‑risk claims (top 1% by amount)")
-    st.metric("Outlier threshold", f"Ksh {threshold:,.0f}")
-    if not outliers.empty:
-        st.dataframe(outliers[['CLAIM ID', 'MAIN HOSPITAL', 'BENEFIT DESC', 'AMOUNT']].head(15),
-                     use_container_width=True, column_config={'AMOUNT': st.column_config.NumberColumn(format="Ksh %.0f")})
-    
-    st.markdown("""
-    <div class="insight">
-        <b>📌 Management actions</b><br>
-        • Negotiate pricing for the top 5 benefits and hospitals.<br>
-        • Audit outlier claims monthly – they carry disproportionate risk.<br>
-        • Investigate hospitals with high patient churn (service quality, billing issues).<br>
-        • High cost per visit for certain benefits may indicate overcharging.
-    </div>
-    """, unsafe_allow_html=True)
+    fig_eff = px.scatter(provider, x='COST_PER_VISIT', y='RETENTION_RATE',
+                         size='TOTAL_COST', hover_name='MAIN HOSPITAL',
+                         title='Cost per Visit vs Retention Rate',
+                         labels={'COST_PER_VISIT': 'Avg Cost per Visit (Ksh)',
+                                 'RETENTION_RATE': 'Retention Rate (%)'},
+                         color='TOTAL_COST', color_continuous_scale='Viridis')
+    fig_eff.update_traces(hovertemplate='<b>%{hovertext}</b><br>Cost per Visit: Ksh %{x:,.0f}<br>Retention: %{y:.1f}%<br>Total Cost: Ksh %{marker.size:,.0f}<extra></extra>')
+    fig_eff.update_layout(xaxis_tickformat=',.0f')
+    st.plotly_chart(fig_eff, use_container_width=True)
 
-# ==================== TAB 3: ATTRACTIVE VISUALS ====================
+# ---------- TAB 3 ----------
 with tab3:
-    st.subheader("Data storytelling – engaging and insightful")
-    
-    # Sunburst
-    sun_data = df.groupby(['SERVICE TYPE', 'BENEFIT DESC'])['AMOUNT'].sum().reset_index()
-    fig_sun = px.sunburst(sun_data, path=['SERVICE TYPE', 'BENEFIT DESC'], values='AMOUNT',
-                          color='AMOUNT', color_continuous_scale='Blues',
-                          title="Cost hierarchy: Service type → Benefit", template='plotly_white')
-    st.plotly_chart(fig_sun, use_container_width=True)
-    
-    # Treemap over months
-    monthly_benefit = df.groupby([df['TRANSACTION DATE'].dt.to_period('M'), 'BENEFIT DESC'])['AMOUNT'].sum().reset_index()
-    monthly_benefit['Month'] = monthly_benefit['TRANSACTION DATE'].dt.strftime('%b')
-    top_benefits = monthly_benefit.groupby('BENEFIT DESC')['AMOUNT'].sum().nlargest(8).index.tolist()
-    monthly_top = monthly_benefit[monthly_benefit['BENEFIT DESC'].isin(top_benefits)]
-    fig_tree = px.treemap(monthly_top, path=['Month', 'BENEFIT DESC'], values='AMOUNT',
-                          color='AMOUNT', color_continuous_scale='Viridis',
-                          title="Monthly cost evolution (top 8 benefits)", template='plotly_white')
-    st.plotly_chart(fig_tree, use_container_width=True)
-    
-    # Radar for top 5 hospitals
-    top5_hosp = df.groupby('MAIN HOSPITAL')['AMOUNT'].sum().nlargest(5).index.tolist()
-    radar_df = df[df['MAIN HOSPITAL'].isin(top5_hosp)].groupby('MAIN HOSPITAL').agg(
-        Cost_per_visit=('AMOUNT', 'mean'),
-        Avg_claim=('AMOUNT', 'mean'),
-        Visit_count=('VISIT_KEY', 'nunique')
+    st.subheader("Monthly Performance with MoM Changes")
+    monthly = df_filtered.groupby(df_filtered['TRANSACTION DATE'].dt.to_period('M')).agg(
+        AMOUNT=('AMOUNT', 'sum'),
+        CLAIMS=('CLAIM ID', 'count'),
+        VISITS=('VISIT_KEY', 'nunique')
     ).reset_index()
-    # Normalise
-    for col in ['Cost_per_visit', 'Avg_claim', 'Visit_count']:
-        radar_df[col] = (radar_df[col] - radar_df[col].min()) / (radar_df[col].max() - radar_df[col].min()) * 100
-    fig_radar = px.line_polar(radar_df, r='Cost_per_visit', theta='MAIN HOSPITAL', line_close=True,
-                              title="Comparative performance (normalised)", template='plotly_white')
-    st.plotly_chart(fig_radar, use_container_width=True)
+    monthly['MONTH_NAME'] = monthly['TRANSACTION DATE'].dt.strftime('%b')
+    monthly['AMOUNT_MOM'] = monthly['AMOUNT'].pct_change() * 100
+    monthly['CLAIMS_MOM'] = monthly['CLAIMS'].pct_change() * 100
+    monthly['VISITS_MOM'] = monthly['VISITS'].pct_change() * 100
     
-    # Heatmap: day of week vs hour
-    df['Day'] = df['ARRIVAL DATE'].dt.day_name()
-    df['Hour'] = df['ARRIVAL DATE'].dt.hour
-    heat_data = df.groupby(['Day', 'Hour']).size().reset_index(name='Count')
-    pivot = heat_data.pivot(index='Day', columns='Hour', values='Count').fillna(0)
-    days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-    pivot = pivot.reindex(days_order)
-    fig_heat = px.imshow(pivot, labels=dict(x="Hour of day", y="Day of week", color="Visits"),
-                         color_continuous_scale='Blues', aspect='auto',
-                         title="Patient arrival patterns", template='plotly_white')
-    st.plotly_chart(fig_heat, use_container_width=True)
-
-# ==================== TAB 4: HOSPITAL DEEP DIVE ====================
-with tab4:
-    st.subheader("Compare hospitals side by side")
-    hosp_list = df['MAIN HOSPITAL'].unique().tolist()
-    selected = st.multiselect("Select hospitals to compare", hosp_list, default=hosp_list[:2] if len(hosp_list)>=2 else hosp_list[:1])
-    if selected:
-        compare_df = df[df['MAIN HOSPITAL'].isin(selected)]
-        
-        # Monthly trend comparison
-        monthly_comp = compare_df.groupby([compare_df['TRANSACTION DATE'].dt.to_period('M'), 'MAIN HOSPITAL'])['AMOUNT'].sum().reset_index()
-        monthly_comp['Month'] = monthly_comp['TRANSACTION DATE'].dt.strftime('%b')
-        fig_comp = px.line(monthly_comp, x='Month', y='AMOUNT', color='MAIN HOSPITAL', markers=True,
-                           title="Monthly cost comparison", template='plotly_white')
-        st.plotly_chart(fig_comp, use_container_width=True)
-        
-        # Benefit breakdown
-        benefit_comp = compare_df.groupby(['MAIN HOSPITAL', 'BENEFIT DESC'])['AMOUNT'].sum().reset_index()
-        top_benefits_comp = benefit_comp.groupby('BENEFIT DESC')['AMOUNT'].sum().nlargest(10).index.tolist()
-        benefit_comp_top = benefit_comp[benefit_comp['BENEFIT DESC'].isin(top_benefits_comp)]
-        fig_bar_comp = px.bar(benefit_comp_top, x='BENEFIT DESC', y='AMOUNT', color='MAIN HOSPITAL',
-                              barmode='group', title="Benefit cost comparison", template='plotly_white')
-        st.plotly_chart(fig_bar_comp, use_container_width=True)
-        
-        # Summary metrics table
-        summary = compare_df.groupby('MAIN HOSPITAL').agg(
-            Total_cost=('AMOUNT', 'sum'),
-            Unique_visits=('VISIT_KEY', 'nunique'),
-            Unique_patients=('MEMBER NUMBER', 'nunique')
-        ).reset_index()
-        summary['Avg_cost_per_visit'] = summary['Total_cost'] / summary['Unique_visits']
-        st.dataframe(summary.style.format({
-            'Total_cost': 'Ksh {:,.0f}',
-            'Avg_cost_per_visit': 'Ksh {:,.0f}'
-        }), use_container_width=True, hide_index=True)
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig.add_trace(go.Bar(x=monthly['MONTH_NAME'], y=monthly['AMOUNT'],
+                         name='Amount (Ksh)', marker_color='#2c7a7a',
+                         hovertemplate='Month: %{x}<br>Amount: Ksh %{y:,.0f}<extra></extra>'), secondary_y=False)
+    fig.add_trace(go.Scatter(x=monthly['MONTH_NAME'], y=monthly['CLAIMS'],
+                             name='Claims', mode='lines+markers',
+                             line=dict(color='#f4a261', width=3),
+                             hovertemplate='Month: %{x}<br>Claims: %{y:,.0f}<extra></extra>'), secondary_y=True)
+    fig.add_trace(go.Scatter(x=monthly['MONTH_NAME'], y=monthly['VISITS'],
+                             name='Unique Visits', mode='lines+markers',
+                             line=dict(color='#2a9d8f', dash='dot'),
+                             hovertemplate='Month: %{x}<br>Unique Visits: %{y:,.0f}<extra></extra>'), secondary_y=True)
+    fig.update_layout(title='Monthly Trends', height=450, hovermode='x unified')
+    fig.update_yaxes(title_text="Amount (Ksh)", tickformat=',.0f', secondary_y=False)
+    fig.update_yaxes(title_text="Count", tickformat=',.0f', secondary_y=True)
+    st.plotly_chart(fig, use_container_width=True)
+    
+    st.subheader("Month-over-Month Change (%)")
+    mom_table = monthly[['MONTH_NAME', 'AMOUNT_MOM', 'CLAIMS_MOM', 'VISITS_MOM']].dropna()
+    if not mom_table.empty:
+        for col in ['AMOUNT_MOM', 'CLAIMS_MOM', 'VISITS_MOM']:
+            mom_table[col] = pd.to_numeric(mom_table[col], errors='coerce')
+        styled = mom_table.style.format({
+            'AMOUNT_MOM': '{:.1f}%',
+            'CLAIMS_MOM': '{:.1f}%',
+            'VISITS_MOM': '{:.1f}%'
+        })
+        st.dataframe(styled, use_container_width=True)
     else:
-        st.info("Please select at least one hospital from the dropdown.")
+        st.info("Not enough months to calculate MoM changes.")
 
-# ==================== TAB 5: DATA EXPORT ====================
+# ---------- TAB 4 ----------
+with tab4:
+    st.subheader("Cost Outlier Detection (Top 1% Claims)")
+    if len(df_filtered) > 0:
+        threshold = df_filtered['AMOUNT'].quantile(0.99)
+        st.metric("99th Percentile Threshold", f"Ksh {threshold:,.0f}")
+        outliers = df_filtered[df_filtered['AMOUNT'] >= threshold]
+        st.write(f"**{len(outliers):,} claims** exceed this threshold (top 1%).")
+        if not outliers.empty:
+            st.dataframe(outliers[['CLAIM ID', 'MEMBER NUMBER', 'PATIENT NAME',
+                                   'MAIN HOSPITAL', 'AMOUNT', 'SERVICE TYPE']].head(50),
+                         use_container_width=True,
+                         column_config={'AMOUNT': st.column_config.NumberColumn(format="Ksh %.0f")})
+        sample = df_filtered.sample(min(5000, len(df_filtered)))
+        fig_out = px.scatter(sample, x='TRANSACTION DATE', y='AMOUNT',
+                             color='SERVICE TYPE', title='Claim Amount Distribution (sampled)',
+                             labels={'AMOUNT': 'Claim Amount (Ksh)'})
+        fig_out.add_hline(y=threshold, line_dash="dash", line_color="red",
+                          annotation_text=f"99th percentile: {threshold:,.0f}")
+        fig_out.update_traces(hovertemplate='Date: %{x}<br>Amount: Ksh %{y:,.0f}<br>Service: %{marker.color}<extra></extra>')
+        fig_out.update_layout(yaxis_tickformat=',.0f')
+        st.plotly_chart(fig_out, use_container_width=True)
+    else:
+        st.info("No data for outlier analysis.")
+
+# ---------- TAB 5 ----------
 with tab5:
-    st.subheader("Raw data preview (first 100 rows)")
-    st.dataframe(df.head(100), use_container_width=True)
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download filtered data (CSV)", data=csv, file_name="healthcare_data.csv", mime="text/csv")
-    st.caption(f"Currently showing {len(df):,} rows after filters.")
+    st.subheader("Member Lookup")
+    search_term = st.text_input("Enter Member Number or Patient Name")
+    if search_term:
+        mask = (df_filtered['MEMBER NUMBER'].astype(str).str.contains(search_term, case=False) |
+                df_filtered['PATIENT NAME'].str.contains(search_term, case=False))
+        result = df_filtered[mask]
+        if not result.empty:
+            st.success(f"Found {result['MEMBER NUMBER'].nunique():,} matching member(s)")
+            for member in result['MEMBER NUMBER'].unique()[:10]:
+                with st.expander(f"Member: {member}"):
+                    member_data = result[result['MEMBER NUMBER'] == member]
+                    total = member_data['AMOUNT'].sum()
+                    st.metric("Total Claimed", f"Ksh {total:,.0f}")
+                    st.dataframe(member_data[['ARRIVAL DATE', 'MAIN HOSPITAL',
+                                              'SERVICE TYPE', 'AMOUNT']],
+                                 column_config={'AMOUNT': st.column_config.NumberColumn(format="Ksh %.0f")})
+        else:
+            st.warning("No matching member found.")
 
-# ------------------------------------------------------------
-# FOOTER
-# ------------------------------------------------------------
+# ---------- TAB 6 ----------
+with tab6:
+    st.subheader("Patient Retention Analysis")
+    def first_hosp(g): return g.loc[g['ARRIVAL DATE'].idxmin(), 'MAIN HOSPITAL']
+    def last_hosp(g): return g.loc[g['ARRIVAL DATE'].idxmax(), 'MAIN HOSPITAL']
+    first = df_filtered.groupby('MEMBER NUMBER').apply(first_hosp).reset_index(name='FIRST')
+    last = df_filtered.groupby('MEMBER NUMBER').apply(last_hosp).reset_index(name='LAST')
+    merged = first.merge(last, on='MEMBER NUMBER')
+    merged['SWITCHED'] = merged['FIRST'] != merged['LAST']
+    switch_stats = merged.groupby('FIRST').agg(Patients=('MEMBER NUMBER', 'count'), Switched=('SWITCHED', 'sum')).reset_index()
+    switch_stats['Retained'] = switch_stats['Patients'] - switch_stats['Switched']
+    switch_stats['Retention %'] = switch_stats['Retained'] / switch_stats['Patients'] * 100
+    top_switch = switch_stats.nlargest(10, 'Switched')
+    if not top_switch.empty:
+        fig_switch = px.bar(top_switch, x='Switched', y='FIRST', orientation='h',
+                            text='Switched', color='Retention %', color_continuous_scale='Reds',
+                            title='Hospitals with Most Patients Ending at Different Hospital')
+        fig_switch.update_traces(texttemplate='%{text}', textposition='outside',
+                                 hovertemplate='Hospital: %{y}<br>Switched Patients: %{x}<br>Retention Rate: %{marker.color:.1f}%<extra></extra>')
+        fig_switch.update_layout(height=450, margin=dict(l=150), xaxis_tickformat=',.0f')
+        st.plotly_chart(fig_switch, use_container_width=True)
+    else:
+        st.info("Not enough data for switching analysis.")
+    
+    st.subheader("Export Data")
+    csv = df_filtered.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Download Filtered Data as CSV", data=csv,
+                       file_name="filtered_claims.csv", mime="text/csv")
+    st.caption(f"Filtered dataset: {len(df_filtered):,} rows | {df_filtered['MEMBER NUMBER'].nunique():,} unique members")
+
 st.markdown("---")
-st.caption("Healthcare Intelligence Dashboard | Built with Streamlit & Plotly | Designed for decision makers")
+st.caption("Healthcare Claims Dashboard | Built with Streamlit & Plotly | Data period: Jan–Apr 2026")
