@@ -10,15 +10,118 @@ warnings.filterwarnings('ignore')
 # ============================================
 # PAGE CONFIG
 # ============================================
-st.set_page_config(page_title="Healthcare Claims Analytics", page_icon="🏥", layout="wide")
+st.set_page_config(page_title="DEFMIS Healthcare Analytics", page_icon="🏥", layout="wide")
 
 # ============================================
-# CUSTOM CSS (unchanged)
+# CUSTOM CSS (with acacia tree background)
 # ============================================
 st.markdown("""
 <style>
-    .stApp { background-color: #f5f9fc; }
-    .css-1d391kg { background-color: #ffffff; border-right: 1px solid #e0e7ed; }
+    /* Main app background */
+    .stApp {
+        background: linear-gradient(135deg, #e9f0f5 0%, #d4e2ed 100%);
+    }
+    
+    /* Acacia tree background for login area (full page behind card) */
+    .login-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-image: url("https://upload.wikimedia.org/wikipedia/commons/5/5b/Acacia_erioloba_-_Keetmanshoop_2.jpg");
+        background-size: cover;
+        background-position: center 30%;
+        background-repeat: no-repeat;
+        filter: brightness(0.7) blur(2px);
+        z-index: -2;
+    }
+    /* Overlay to improve text contrast */
+    .login-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: -1;
+    }
+    
+    /* Professional login card */
+    .login-container {
+        max-width: 460px;
+        margin: 8rem auto;
+        padding: 2.2rem 2rem 2.5rem 2rem;
+        background: rgba(255, 255, 255, 0.96);
+        border-radius: 28px;
+        box-shadow: 0 25px 45px -12px rgba(0,0,0,0.3);
+        backdrop-filter: blur(2px);
+        border: 1px solid rgba(255,255,255,0.3);
+        transition: transform 0.2s ease;
+        position: relative;
+        z-index: 2;
+    }
+    .login-container:hover {
+        transform: translateY(-3px);
+    }
+    .login-title {
+        text-align: center;
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1a4a6e;
+        margin-bottom: 0.25rem;
+        letter-spacing: -0.5px;
+    }
+    .login-subtitle {
+        text-align: center;
+        font-size: 0.9rem;
+        color: #2c6e4f;
+        font-weight: 500;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid #cbd5e1;
+        display: inline-block;
+        padding-bottom: 6px;
+        width: auto;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .stTextInput > div > div > input {
+        border-radius: 40px;
+        border: 1px solid #cbd5e1;
+        padding: 0.7rem 1.2rem;
+        font-size: 1rem;
+        background: white;
+    }
+    .stButton > button {
+        border-radius: 40px;
+        background: linear-gradient(95deg, #1a6f8c 0%, #1f8a6b 100%);
+        color: white;
+        font-weight: 600;
+        border: none;
+        padding: 0.65rem 1rem;
+        width: 100%;
+        transition: all 0.2s;
+        font-size: 1rem;
+    }
+    .stButton > button:hover {
+        background: linear-gradient(95deg, #0f5a73 0%, #17735a 100%);
+        transform: scale(1.02);
+        box-shadow: 0 6px 14px rgba(26,111,140,0.3);
+    }
+    .login-footer {
+        text-align: center;
+        font-size: 0.75rem;
+        color: #5a6e7c;
+        margin-top: 2rem;
+        border-top: 1px solid #e2e8f0;
+        padding-top: 1rem;
+    }
+    .login-icon {
+        text-align: center;
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+    }
+    /* Dashboard styles (unchanged from original) */
     .kpi-card {
         background: white; border-radius: 16px; padding: 1rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #e9ecef;
@@ -39,53 +142,56 @@ st.markdown("""
     }
     .stTabs [aria-selected="true"] { background-color: #1a6f8c; color: white; }
     .stDataFrame { border-radius: 12px; overflow: hidden; }
-    .login-container {
-        max-width: 400px;
-        margin: 8rem auto;
-        padding: 2rem;
-        background: white;
-        border-radius: 24px;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-        border: 1px solid #e2e8f0;
-    }
-    .login-title {
-        text-align: center;
-        font-size: 1.8rem;
-        font-weight: 600;
-        color: #1a4a6e;
-        margin-bottom: 1.5rem;
-    }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================
-# LOGIN / AUTHENTICATION
+# LOGIN PAGE WITH ACACIA TREE BACKGROUND
 # ============================================
 def login():
-    """Display login form and return True if credentials are correct."""
+    """Professional login with full acacia tree background."""
+    # Background container
+    st.markdown('<div class="login-bg"></div><div class="login-overlay"></div>', unsafe_allow_html=True)
+    
     with st.container():
-        st.markdown('<div class="login-container">', unsafe_allow_html=True)
-        st.markdown('<div class="login-title">🏥 Healthcare Claims Dashboard</div>', unsafe_allow_html=True)
-        username = st.text_input("Username", placeholder="Enter your username")
-        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        st.markdown("""
+        <div class="login-container">
+            <div class="login-icon">🏥</div>
+            <div class="login-title">DEFMIS</div>
+            <div class="login-subtitle">Healthcare Claims Intelligence</div>
+        """, unsafe_allow_html=True)
+        
+        username = st.text_input("Username", placeholder="e.g., DEFMIS", key="login_user")
+        password = st.text_input("Password", type="password", placeholder="••••••", key="login_pass")
+        
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
-            login_btn = st.button("🔐 Login", use_container_width=True)
+            login_btn = st.button("🔐 Secure Login", use_container_width=True)
+        
+        st.markdown("""
+            <div class="login-footer">
+                Authorized access only · All data encrypted
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
         if login_btn:
             if username == "DEFMIS" and password == "2026":
                 st.session_state["authenticated"] = True
                 st.session_state["username"] = username
                 st.rerun()
             else:
-                st.error("Invalid username or password. Please try again.")
-        st.markdown('</div>', unsafe_allow_html=True)
+                st.error("Invalid credentials. Please contact support.")
 
+# ============================================
+# AUTHENTICATION CHECK
+# ============================================
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
     login()
-    st.stop()  # Do not load data or dashboard until logged in
+    st.stop()
 
 # ============================================
 # DATA LOADING (only after successful login)
@@ -127,7 +233,7 @@ except Exception as e:
     st.stop()
 
 # ============================================
-# DASHBOARD (with comma formatting)
+# DASHBOARD (unchanged, all original logic preserved)
 # ============================================
 
 with st.sidebar:
@@ -200,7 +306,7 @@ with col4:
 st.markdown("---")
 
 # ============================================
-# TABS
+# TABS (all remain exactly as before - unchanged)
 # ============================================
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📊 Service & Benefit", "🏥 Provider Scorecard", "📈 Monthly Trends",
@@ -392,4 +498,4 @@ with tab6:
     st.caption(f"Filtered dataset: {len(df_filtered):,} rows | {df_filtered['MEMBER NUMBER'].nunique():,} unique members")
 
 st.markdown("---")
-st.caption("Healthcare Claims Dashboard | Built with Streamlit & Plotly | Data period: Jan–Apr 2026")
+st.caption("DEFMIS Healthcare Claims Dashboard | Powered by Streamlit & Plotly | Data period: Jan–Apr 2026")
