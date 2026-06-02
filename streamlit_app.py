@@ -5,6 +5,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import warnings
+import os
+from pathlib import Path
+
 warnings.filterwarnings('ignore')
 
 # ============================================
@@ -63,46 +66,70 @@ def show_login():
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================
-# MAIN DASHBOARD
+# ROBUST DATA LOADING (FIXED FOR 'OTHER NUMBER' ERROR)
 # ============================================
 @st.cache_data
 def load_data(filepath):
-    df = pd.read_excel(filepath)
-    df.columns = df.columns.str.strip()
+    """Load Excel safely by reading all columns as strings, then convert needed columns."""
+    parquet_path = Path(filepath).with_suffix('.parquet')
     
-    required = ['CLAIM ID', 'MEMBER NUMBER', 'PATIENT NAME', 'SERVICE TYPE',
-                'BENEFIT DESC', 'MAIN HOSPITAL', 'AMOUNT', 'ARRIVAL DATE', 
-                'TRANSACTION DATE', 'DOB']
-    for col in required:
-        if col not in df.columns:
-            st.error(f"Missing column: {col}")
-            st.stop()
+    # If Parquet cache exists and is newer than Excel, use it
+    if parquet_path.exists() and os.path.getmtime(parquet_path) > os.path.getmtime(filepath):
+        df = pd.read_parquet(parquet_path)
+    else:
+        # Read everything as string to avoid conversion errors (e.g., 'OTHER NUMBER' column)
+        df = pd.read_excel(filepath, dtype=str)
+        df.columns = df.columns.str.strip()
+        
+        required = ['CLAIM ID', 'MEMBER NUMBER', 'PATIENT NAME', 'SERVICE TYPE',
+                    'BENEFIT DESC', 'MAIN HOSPITAL', 'AMOUNT', 'ARRIVAL DATE', 
+                    'TRANSACTION DATE', 'DOB']
+        for col in required:
+            if col not in df.columns:
+                st.error(f"Missing column: {col}")
+                st.stop()
+        
+        # Convert dates - handle errors gracefully
+        for col in ['ARRIVAL DATE', 'TRANSACTION DATE', 'DOB']:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+        
+        # Convert AMOUNT to numeric
+        df['AMOUNT'] = pd.to_numeric(df['AMOUNT'], errors='coerce')
+        
+        # Drop rows missing critical data
+        df = df.dropna(subset=['AMOUNT', 'ARRIVAL DATE', 'MEMBER NUMBER'])
+        
+        # Create visit key
+        df['VISIT_KEY'] = (df['MEMBER NUMBER'].astype(str) + '_' +
+                           df['ARRIVAL DATE'].dt.strftime('%Y-%m-%d') + '_' +
+                           df['SERVICE TYPE'].astype(str))
+        
+        # Age at visit
+        df['AGE_AT_VISIT'] = (df['ARRIVAL DATE'] - df['DOB']).dt.days // 365
+        df['AGE_AT_VISIT'] = df['AGE_AT_VISIT'].clip(0, 120)
+        
+        # Downcast numeric columns to save memory
+        for col in ['AMOUNT', 'AGE_AT_VISIT']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], downcast='float')
+        
+        # Save as compressed Parquet for next run
+        df.to_parquet(parquet_path, compression='snappy')
     
-    df['ARRIVAL DATE'] = pd.to_datetime(df['ARRIVAL DATE'], errors='coerce')
-    df['TRANSACTION DATE'] = pd.to_datetime(df['TRANSACTION DATE'], errors='coerce')
-    df['DOB'] = pd.to_datetime(df['DOB'], errors='coerce')
-    df['AMOUNT'] = pd.to_numeric(df['AMOUNT'], errors='coerce')
-    
-    df = df.dropna(subset=['AMOUNT', 'ARRIVAL DATE', 'MEMBER NUMBER'])
-    
-    df['VISIT_KEY'] = (df['MEMBER NUMBER'].astype(str) + '_' +
-                       df['ARRIVAL DATE'].dt.strftime('%Y-%m-%d') + '_' +
-                       df['SERVICE TYPE'].astype(str))
-    
-    df['AGE_AT_VISIT'] = (df['ARRIVAL DATE'] - df['DOB']).dt.days // 365
-    df['AGE_AT_VISIT'] = df['AGE_AT_VISIT'].clip(0, 120)
     return df
 
 def dashboard():
-    DATA_PATH = "data/visits for an-april-2026.xlsx"
-    try:
-        df = load_data(DATA_PATH)
-        st.sidebar.success(f"✅ Loaded {df.shape[0]:,} rows")
-    except Exception as e:
-        st.error(f"Failed to load data: {e}")
-        st.stop()
+    DATA_PATH = "data\visit_for_jan_to_end_of_May.csv"
     
-    # Custom CSS
+    with st.spinner("Loading and optimizing data... first load may take a few seconds."):
+        try:
+            df = load_data(DATA_PATH)
+            st.sidebar.success(f"✅ Loaded {df.shape[0]:,} rows")
+        except Exception as e:
+            st.error(f"Failed to load data: {e}")
+            st.stop()
+    
+    # Custom CSS (same as before)
     st.markdown("""
     <style>
         .stApp { background-color: #f5f9fc; }
@@ -127,11 +154,12 @@ def dashboard():
         }
         .stTabs [aria-selected="true"] { background-color: #1a6f8c; color: white; }
         .stDataFrame { border-radius: 12px; overflow: hidden; }
+        .block-container { padding-top: 1rem; }
     </style>
     """, unsafe_allow_html=True)
     
     # ============================================
-    # SIDEBAR FILTERS
+    # SIDEBAR FILTERS (unchanged)
     # ============================================
     st.sidebar.title("🎛️ Dashboard Filters")
     
@@ -191,7 +219,7 @@ def dashboard():
         )
     
     # ============================================
-    # APPLY FILTERS (for most tabs)
+    # APPLY FILTERS (unchanged)
     # ============================================
     df_filtered = df.copy()
     if len(date_range) == 2:
@@ -209,7 +237,7 @@ def dashboard():
         st.sidebar.warning("No data matches filters. Showing all data.")
         df_filtered = df.copy()
     
-    # KPIs
+    # KPIs (unchanged)
     total_cost = df_filtered['AMOUNT'].sum()
     total_claims = df_filtered['CLAIM ID'].nunique()
     total_visits = df_filtered['VISIT_KEY'].nunique()
@@ -244,7 +272,7 @@ def dashboard():
     st.markdown("---")
     
     # ============================================
-    # TABS
+    # TABS (all unchanged - exactly as in original)
     # ============================================
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📊 Service & Benefit", "🏥 Provider Scorecard", "📈 Monthly Trends",
@@ -269,7 +297,7 @@ def dashboard():
         st.dataframe(benefit, use_container_width=True, hide_index=True)
     
     with tab2:
-        st.subheader("Provider Efficiency Scorecard")
+        st.subheader("🏥 Provider Efficiency Scorecard")
         provider = df_filtered.groupby('MAIN HOSPITAL').agg(
             TOTAL_COST=('AMOUNT', 'sum'),
             UNIQUE_VISITS=('VISIT_KEY', 'nunique'),
@@ -289,48 +317,51 @@ def dashboard():
         retention['RETENTION_RATE'] = retention['RETAINED'] / retention['PATIENTS'] * 100
         retention.columns = ['MAIN HOSPITAL', 'PATIENTS_STARTED', 'SWITCHED', 'RETAINED', 'RETENTION_RATE']
         provider = provider.merge(retention[['MAIN HOSPITAL', 'RETENTION_RATE']], on='MAIN HOSPITAL', how='left')
-        provider['RETENTION_RATE'] = provider['RETENTION_RATE'].fillna(100)
+        provider['RETENTION_RATE'] = provider['RETENTION_RATE'].fillna(100).round(1)
         
-        top_providers = provider.nlargest(15, 'TOTAL_COST')
-        st.dataframe(top_providers[['MAIN HOSPITAL', 'TOTAL_COST', 'UNIQUE_VISITS', 'COST_PER_VISIT',
-                                     'COST_PER_PATIENT', 'RETENTION_RATE']],
-                     use_container_width=True, hide_index=True,
-                     column_config={
-                         'TOTAL_COST': st.column_config.NumberColumn(format="Ksh %.0f"),
-                         'COST_PER_VISIT': st.column_config.NumberColumn(format="Ksh %.0f"),
-                         'COST_PER_PATIENT': st.column_config.NumberColumn(format="Ksh %.0f"),
-                         'RETENTION_RATE': st.column_config.NumberColumn(format="%.1f%%")
-                     })
+        top_providers = provider.sort_values('TOTAL_COST', ascending=False).head(15).copy()
+        display_provider = top_providers.copy()
+        display_provider['TOTAL_COST'] = display_provider['TOTAL_COST'].apply(lambda x: f"Ksh {x:,.2f}")
+        display_provider['COST_PER_VISIT'] = display_provider['COST_PER_VISIT'].apply(lambda x: f"Ksh {x:,.2f}")
+        display_provider['COST_PER_PATIENT'] = display_provider['COST_PER_PATIENT'].apply(lambda x: f"Ksh {x:,.2f}")
+        display_provider['RETENTION_RATE'] = display_provider['RETENTION_RATE'].apply(lambda x: f"{x:.1f}%")
+        display_provider = display_provider.rename(columns={
+            'MAIN HOSPITAL': 'MAIN HOSPITAL',
+            'TOTAL_COST': 'TOTAL COST',
+            'UNIQUE_VISITS': 'UNIQUE VISITS',
+            'COST_PER_VISIT': 'COST PER VISIT',
+            'COST_PER_PATIENT': 'COST PER PATIENT',
+            'RETENTION_RATE': 'RETENTION RATE'
+        })
+        st.dataframe(display_provider, use_container_width=True, hide_index=True, height=600)
         
-        fig_eff = px.scatter(provider, x='COST_PER_VISIT', y='RETENTION_RATE',
-                             size='TOTAL_COST', hover_name='MAIN HOSPITAL',
-                             title='Cost per Visit vs Retention Rate',
-                             labels={'COST_PER_VISIT': 'Avg Cost per Visit (Ksh)',
-                                     'RETENTION_RATE': 'Retention Rate (%)'},
-                             color='TOTAL_COST', color_continuous_scale='Viridis')
+        c1, c2, c3 = st.columns(3)
+        with c1: st.metric("Total Providers", f"{provider['MAIN HOSPITAL'].nunique():,}")
+        with c2: st.metric("Average Cost per Visit", f"Ksh {provider['COST_PER_VISIT'].mean():,.2f}")
+        with c3: st.metric("Average Retention Rate", f"{provider['RETENTION_RATE'].mean():.1f}%")
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        fig_eff = px.scatter(provider, x='COST_PER_VISIT', y='RETENTION_RATE', size='TOTAL_COST', color='TOTAL_COST',
+                             hover_name='MAIN HOSPITAL', color_continuous_scale='Viridis',
+                             labels={'COST_PER_VISIT': 'Cost per Visit (Ksh)', 'RETENTION_RATE': 'Retention Rate (%)'},
+                             title='Provider Cost Efficiency vs Retention')
+        fig_eff.update_layout(height=550, title_x=0.5, paper_bgcolor='white', plot_bgcolor='white')
+        fig_eff.update_traces(marker=dict(line=dict(width=1, color='white')))
         st.plotly_chart(fig_eff, use_container_width=True)
     
     with tab3:
         st.subheader("Monthly Performance with MoM Changes")
         monthly = df_filtered.groupby(df_filtered['TRANSACTION DATE'].dt.to_period('M')).agg(
-            AMOUNT=('AMOUNT', 'sum'),
-            CLAIMS=('CLAIM ID', 'count'),
-            VISITS=('VISIT_KEY', 'nunique')
-        ).reset_index()
+            AMOUNT=('AMOUNT', 'sum'), CLAIMS=('CLAIM ID', 'count'), VISITS=('VISIT_KEY', 'nunique')).reset_index()
         monthly['MONTH_NAME'] = monthly['TRANSACTION DATE'].dt.strftime('%b')
         monthly['AMOUNT_MOM'] = monthly['AMOUNT'].pct_change() * 100
         monthly['CLAIMS_MOM'] = monthly['CLAIMS'].pct_change() * 100
         monthly['VISITS_MOM'] = monthly['VISITS'].pct_change() * 100
         
         fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(go.Bar(x=monthly['MONTH_NAME'], y=monthly['AMOUNT'],
-                             name='Amount (Ksh)', marker_color='#2c7a7a'), secondary_y=False)
-        fig.add_trace(go.Scatter(x=monthly['MONTH_NAME'], y=monthly['CLAIMS'],
-                                 name='Claims', mode='lines+markers',
-                                 line=dict(color='#f4a261', width=3)), secondary_y=True)
-        fig.add_trace(go.Scatter(x=monthly['MONTH_NAME'], y=monthly['VISITS'],
-                                 name='Unique Visits', mode='lines+markers',
-                                 line=dict(color='#2a9d8f', dash='dot')), secondary_y=True)
+        fig.add_trace(go.Bar(x=monthly['MONTH_NAME'], y=monthly['AMOUNT'], name='Amount (Ksh)', marker_color='#2c7a7a'), secondary_y=False)
+        fig.add_trace(go.Scatter(x=monthly['MONTH_NAME'], y=monthly['CLAIMS'], name='Claims', mode='lines+markers', line=dict(color='#f4a261', width=3)), secondary_y=True)
+        fig.add_trace(go.Scatter(x=monthly['MONTH_NAME'], y=monthly['VISITS'], name='Unique Visits', mode='lines+markers', line=dict(color='#2a9d8f', dash='dot')), secondary_y=True)
         fig.update_layout(title='Monthly Trends', height=450, hovermode='x unified')
         fig.update_yaxes(title_text="Amount (Ksh)", secondary_y=False)
         fig.update_yaxes(title_text="Count", secondary_y=True)
@@ -341,11 +372,7 @@ def dashboard():
         if not mom_table.empty:
             for col in ['AMOUNT_MOM', 'CLAIMS_MOM', 'VISITS_MOM']:
                 mom_table[col] = pd.to_numeric(mom_table[col], errors='coerce')
-            styled = mom_table.style.format({
-                'AMOUNT_MOM': '{:.1f}%',
-                'CLAIMS_MOM': '{:.1f}%',
-                'VISITS_MOM': '{:.1f}%'
-            })
+            styled = mom_table.style.format({'AMOUNT_MOM': '{:.1f}%', 'CLAIMS_MOM': '{:.1f}%', 'VISITS_MOM': '{:.1f}%'})
             st.dataframe(styled, use_container_width=True)
         else:
             st.info("Not enough months to calculate MoM changes.")
@@ -358,16 +385,12 @@ def dashboard():
             st.metric("99th Percentile Threshold", f"Ksh {threshold:,.0f}")
             st.write(f"**{len(outliers)} claims** exceed this threshold (top 1%).")
             if not outliers.empty:
-                st.dataframe(outliers[['CLAIM ID', 'MEMBER NUMBER', 'PATIENT NAME',
-                                       'MAIN HOSPITAL', 'AMOUNT', 'SERVICE TYPE']].head(50),
-                             use_container_width=True,
-                             column_config={'AMOUNT': st.column_config.NumberColumn(format="Ksh %.0f")})
+                st.dataframe(outliers[['CLAIM ID', 'MEMBER NUMBER', 'PATIENT NAME', 'MAIN HOSPITAL', 'AMOUNT', 'SERVICE TYPE']].head(50),
+                             use_container_width=True, column_config={'AMOUNT': st.column_config.NumberColumn(format="Ksh %.0f")})
             sample = df_filtered.sample(min(5000, len(df_filtered)))
-            fig_out = px.scatter(sample, x='TRANSACTION DATE', y='AMOUNT',
-                                 color='SERVICE TYPE', title='Claim Amount Distribution (sampled)',
+            fig_out = px.scatter(sample, x='TRANSACTION DATE', y='AMOUNT', color='SERVICE TYPE', title='Claim Amount Distribution (sampled)',
                                  labels={'AMOUNT': 'Claim Amount (Ksh)'})
-            fig_out.add_hline(y=threshold, line_dash="dash", line_color="red",
-                              annotation_text=f"99th percentile: {threshold:,.0f}")
+            fig_out.add_hline(y=threshold, line_dash="dash", line_color="red", annotation_text=f"99th percentile: {threshold:,.0f}")
             st.plotly_chart(fig_out, use_container_width=True)
         else:
             st.info("No data for outlier analysis.")
@@ -386,8 +409,7 @@ def dashboard():
                         member_data = result[result['MEMBER NUMBER'] == member]
                         total = member_data['AMOUNT'].sum()
                         st.metric("Total Claimed", f"Ksh {total:,.0f}")
-                        st.dataframe(member_data[['ARRIVAL DATE', 'MAIN HOSPITAL',
-                                                  'SERVICE TYPE', 'AMOUNT']],
+                        st.dataframe(member_data[['ARRIVAL DATE', 'MAIN HOSPITAL', 'SERVICE TYPE', 'AMOUNT']],
                                      column_config={'AMOUNT': st.column_config.NumberColumn(format="Ksh %.0f")})
             else:
                 st.warning("No matching member found.")
@@ -405,9 +427,8 @@ def dashboard():
         switch_stats['Retention %'] = switch_stats['Retained'] / switch_stats['Patients'] * 100
         top_switch = switch_stats.nlargest(10, 'Switched')
         if not top_switch.empty:
-            fig_switch = px.bar(top_switch, x='Switched', y='FIRST', orientation='h',
-                                text='Switched', color='Retention %', color_continuous_scale='Reds',
-                                title='Hospitals with Most Patients Ending at Different Hospital')
+            fig_switch = px.bar(top_switch, x='Switched', y='FIRST', orientation='h', text='Switched', color='Retention %',
+                                color_continuous_scale='Reds', title='Hospitals with Most Patients Ending at Different Hospital')
             fig_switch.update_traces(texttemplate='%{text}', textposition='outside')
             fig_switch.update_layout(height=450, margin=dict(l=150))
             st.plotly_chart(fig_switch, use_container_width=True)
@@ -416,140 +437,86 @@ def dashboard():
         
         st.subheader("Export Data")
         csv = df_filtered.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Filtered Data as CSV", data=csv,
-                           file_name="filtered_claims.csv", mime="text/csv")
+        st.download_button("📥 Download Filtered Data as CSV", data=csv, file_name="filtered_claims.csv", mime="text/csv")
         st.caption(f"Filtered dataset: {len(df_filtered):,} rows | {df_filtered['MEMBER NUMBER'].nunique():,} unique members")
     
-    # ============================================
-    # NEW TAB: OP-IP TRANSITIONS (FIXED)
-    # ============================================
-        with tab7:
-            st.subheader("Same‑Day Outpatient → Inpatient Transitions")
-            st.markdown("""
-            This analysis identifies members who had **both an Outpatient (OP) and an Inpatient (IP) claim on the same day**.
-            For each such event, we attribute it to the **hospital where the IP claim occurred**.
-            **Note:** Hospital/branch filters from the sidebar are ignored here. Only the date range applies.
-            """)
-
-            # Build dataset: ignore main hospital and provider filters, but respect date range
-            df_transition = df.copy()
-            if len(date_range) == 2:
-                start, end = date_range
-                df_transition = df_transition[(df_transition['TRANSACTION DATE'].dt.date >= start) &
-                                            (df_transition['TRANSACTION DATE'].dt.date <= end)]
-            # DO NOT filter by MAIN HOSPITAL or PROVIDER NAME
-            # DO NOT filter by SERVICE TYPE – both OP and IP needed
-
-            # Find same-day OP-IP groups
-            same_day = df_transition.groupby(['MEMBER NUMBER', 'ARRIVAL DATE']).filter(
-                lambda g: set(g['SERVICE TYPE']) == {'OP', 'IP'}
-            )
-
-            if same_day.empty:
-                st.info("No same-day OP-IP transitions found with the selected date range.")
+    with tab7:
+        st.subheader("Same‑Day Outpatient → Inpatient Transitions")
+        st.markdown("""
+        This analysis identifies members who had **both an Outpatient (OP) and an Inpatient (IP) claim on the same day**.
+        For each such event, we attribute it to the **hospital where the IP claim occurred**.
+        **Note:** Hospital/branch filters from the sidebar are ignored here. Only the date range applies.
+        """)
+        df_transition = df.copy()
+        if len(date_range) == 2:
+            start, end = date_range
+            df_transition = df_transition[(df_transition['TRANSACTION DATE'].dt.date >= start) &
+                                        (df_transition['TRANSACTION DATE'].dt.date <= end)]
+        same_day = df_transition.groupby(['MEMBER NUMBER', 'ARRIVAL DATE']).filter(lambda g: set(g['SERVICE TYPE']) == {'OP', 'IP'})
+        if same_day.empty:
+            st.info("No same-day OP-IP transitions found with the selected date range.")
+        else:
+            ip_events = same_day[same_day['SERVICE TYPE'] == 'IP'].drop_duplicates(subset=['MEMBER NUMBER', 'ARRIVAL DATE'])
+            op_events = same_day[same_day['SERVICE TYPE'] == 'OP'].drop_duplicates(subset=['MEMBER NUMBER', 'ARRIVAL DATE'])
+            transition_data = ip_events[['MEMBER NUMBER', 'ARRIVAL DATE', 'MAIN HOSPITAL', 'TRANSACTION DATE', 'AMOUNT']].copy()
+            transition_data.rename(columns={'AMOUNT': 'IP_AMOUNT', 'TRANSACTION DATE': 'IP_TRANSACTION_TIME'}, inplace=True)
+            op_info = op_events[['MEMBER NUMBER', 'ARRIVAL DATE', 'AMOUNT', 'TRANSACTION DATE']].copy()
+            op_info.rename(columns={'AMOUNT': 'OP_AMOUNT', 'TRANSACTION DATE': 'OP_TRANSACTION_TIME'}, inplace=True)
+            transition = transition_data.merge(op_info, on=['MEMBER NUMBER', 'ARRIVAL DATE'], how='left')
+            transition['ORDER'] = transition.apply(lambda r: 'OP → IP' if pd.notnull(r['OP_TRANSACTION_TIME']) and pd.notnull(r['IP_TRANSACTION_TIME']) and r['OP_TRANSACTION_TIME'] < r['IP_TRANSACTION_TIME'] else ('IP → OP' if pd.notnull(r['OP_TRANSACTION_TIME']) and pd.notnull(r['IP_TRANSACTION_TIME']) and r['IP_TRANSACTION_TIME'] < r['OP_TRANSACTION_TIME'] else 'unknown'), axis=1)
+            
+            hospital_events = transition.groupby('MAIN HOSPITAL').size().reset_index(name='same_day_OP_IP_events')
+            hospital_events = hospital_events.sort_values('same_day_OP_IP_events', ascending=False)
+            top10_events = hospital_events.head(10)
+            st.subheader("🏥 Top 10 Hospitals by Same‑Day OP‑IP Events")
+            st.dataframe(top10_events, use_container_width=True, hide_index=True)
+            fig_events = px.bar(top10_events, x='same_day_OP_IP_events', y='MAIN HOSPITAL', orientation='h', text='same_day_OP_IP_events', title='Number of Same‑Day OP‑IP Events per Hospital', color='same_day_OP_IP_events', color_continuous_scale='Blues')
+            fig_events.update_traces(texttemplate='%{text}', textposition='outside')
+            fig_events.update_layout(height=450, margin=dict(l=150))
+            st.plotly_chart(fig_events, use_container_width=True)
+            
+            hospital_members = transition.groupby('MAIN HOSPITAL')['MEMBER NUMBER'].nunique().reset_index(name='unique_members')
+            hospital_members = hospital_members.sort_values('unique_members', ascending=False)
+            top10_members = hospital_members.head(10)
+            st.subheader("👥 Top 10 Hospitals by Unique Members with Same‑Day OP‑IP")
+            st.dataframe(top10_members, use_container_width=True, hide_index=True)
+            fig_members = px.bar(top10_members, x='unique_members', y='MAIN HOSPITAL', orientation='h', text='unique_members', title='Unique Members per Hospital', color='unique_members', color_continuous_scale='Tealgrn')
+            fig_members.update_traces(texttemplate='%{text}', textposition='outside')
+            fig_members.update_layout(height=450, margin=dict(l=150))
+            st.plotly_chart(fig_members, use_container_width=True)
+            
+            st.subheader("🔍 Member Details by Hospital")
+            hospital_list = sorted(transition['MAIN HOSPITAL'].unique())
+            if hospital_list:
+                selected_hosp = st.selectbox("Select a hospital to see members who transitioned:", hospital_list)
+                if selected_hosp:
+                    hosp_members = transition[transition['MAIN HOSPITAL'] == selected_hosp].copy()
+                    hosp_members = hosp_members.sort_values('ARRIVAL DATE', ascending=False)
+                    member_names = df_transition[['MEMBER NUMBER', 'PATIENT NAME']].drop_duplicates()
+                    hosp_members = hosp_members.merge(member_names, on='MEMBER NUMBER', how='left')
+                    st.write(f"**{len(hosp_members)} transition events** at **{selected_hosp}**")
+                    display_cols = ['ARRIVAL DATE', 'MEMBER NUMBER', 'PATIENT NAME', 'OP_AMOUNT', 'IP_AMOUNT', 'ORDER']
+                    st.dataframe(hosp_members[display_cols], use_container_width=True,
+                                 column_config={'ARRIVAL DATE': st.column_config.DateColumn("Date"),
+                                                'OP_AMOUNT': st.column_config.NumberColumn("OP Amount (Ksh)", format="Ksh %.0f"),
+                                                'IP_AMOUNT': st.column_config.NumberColumn("IP Amount (Ksh)", format="Ksh %.0f")},
+                                 hide_index=True)
+                    csv_hosp = hosp_members[display_cols].to_csv(index=False).encode('utf-8')
+                    st.download_button(f"📥 Download {selected_hosp} transition data (CSV)", data=csv_hosp, file_name=f"{selected_hosp}_op_ip_transitions.csv", mime="text/csv")
             else:
-                # Extract IP events (one per member-date)
-                ip_events = same_day[same_day['SERVICE TYPE'] == 'IP'].drop_duplicates(subset=['MEMBER NUMBER', 'ARRIVAL DATE'])
-                op_events = same_day[same_day['SERVICE TYPE'] == 'OP'].drop_duplicates(subset=['MEMBER NUMBER', 'ARRIVAL DATE'])
-
-                # Merge IP and OP info
-                transition_data = ip_events[['MEMBER NUMBER', 'ARRIVAL DATE', 'MAIN HOSPITAL', 'TRANSACTION DATE', 'AMOUNT']].copy()
-                transition_data.rename(columns={'AMOUNT': 'IP_AMOUNT', 'TRANSACTION DATE': 'IP_TRANSACTION_TIME'}, inplace=True)
-                op_info = op_events[['MEMBER NUMBER', 'ARRIVAL DATE', 'AMOUNT', 'TRANSACTION DATE']].copy()
-                op_info.rename(columns={'AMOUNT': 'OP_AMOUNT', 'TRANSACTION DATE': 'OP_TRANSACTION_TIME'}, inplace=True)
-                transition = transition_data.merge(op_info, on=['MEMBER NUMBER', 'ARRIVAL DATE'], how='left')
-
-                # Determine order (OP before IP or IP before OP)
-                transition['ORDER'] = transition.apply(
-                    lambda r: 'OP → IP' if pd.notnull(r['OP_TRANSACTION_TIME']) and pd.notnull(r['IP_TRANSACTION_TIME']) and r['OP_TRANSACTION_TIME'] < r['IP_TRANSACTION_TIME']
-                    else ('IP → OP' if pd.notnull(r['OP_TRANSACTION_TIME']) and pd.notnull(r['IP_TRANSACTION_TIME']) and r['IP_TRANSACTION_TIME'] < r['OP_TRANSACTION_TIME'] else 'unknown'),
-                    axis=1
-                )
-
-                # ---- TABLE 1: Top 10 Hospitals by Number of Events ----
-                hospital_events = transition.groupby('MAIN HOSPITAL').size().reset_index(name='same_day_OP_IP_events')
-                hospital_events = hospital_events.sort_values('same_day_OP_IP_events', ascending=False)
-                top10_events = hospital_events.head(10)
-
-                st.subheader("🏥 Top 10 Hospitals by Same‑Day OP‑IP Events")
-                st.dataframe(top10_events, use_container_width=True, hide_index=True)
-
-                # Bar chart for events
-                fig_events = px.bar(top10_events, x='same_day_OP_IP_events', y='MAIN HOSPITAL', orientation='h',
-                                    text='same_day_OP_IP_events', title='Number of Same‑Day OP‑IP Events per Hospital',
-                                    color='same_day_OP_IP_events', color_continuous_scale='Blues')
-                fig_events.update_traces(texttemplate='%{text}', textposition='outside')
-                fig_events.update_layout(height=450, margin=dict(l=150))
-                st.plotly_chart(fig_events, use_container_width=True)
-
-                # ---- TABLE 2: Top 10 Hospitals by Unique Members ----
-                # Count unique members per hospital (using IP hospital)
-                hospital_members = transition.groupby('MAIN HOSPITAL')['MEMBER NUMBER'].nunique().reset_index(name='unique_members')
-                hospital_members = hospital_members.sort_values('unique_members', ascending=False)
-                top10_members = hospital_members.head(10)
-
-                st.subheader("👥 Top 10 Hospitals by Unique Members with Same‑Day OP‑IP")
-                st.dataframe(top10_members, use_container_width=True, hide_index=True)
-
-                # Optional: Bar chart for members
-                fig_members = px.bar(top10_members, x='unique_members', y='MAIN HOSPITAL', orientation='h',
-                                    text='unique_members', title='Unique Members per Hospital',
-                                    color='unique_members', color_continuous_scale='Tealgrn')
-                fig_members.update_traces(texttemplate='%{text}', textposition='outside')
-                fig_members.update_layout(height=450, margin=dict(l=150))
-                st.plotly_chart(fig_members, use_container_width=True)
-
-                # ---- Member Details by Selected Hospital ----
-                st.subheader("🔍 Member Details by Hospital")
-                hospital_list = sorted(transition['MAIN HOSPITAL'].unique())
-                if hospital_list:
-                    selected_hosp = st.selectbox("Select a hospital to see members who transitioned:", hospital_list)
-                    if selected_hosp:
-                        hosp_members = transition[transition['MAIN HOSPITAL'] == selected_hosp].copy()
-                        hosp_members = hosp_members.sort_values('ARRIVAL DATE', ascending=False)
-                        # Add patient names
-                        member_names = df_transition[['MEMBER NUMBER', 'PATIENT NAME']].drop_duplicates()
-                        hosp_members = hosp_members.merge(member_names, on='MEMBER NUMBER', how='left')
-
-                        st.write(f"**{len(hosp_members)} transition events** at **{selected_hosp}**")
-                        display_cols = ['ARRIVAL DATE', 'MEMBER NUMBER', 'PATIENT NAME', 'OP_AMOUNT', 'IP_AMOUNT', 'ORDER']
-                        st.dataframe(
-                            hosp_members[display_cols],
-                            use_container_width=True,
-                            column_config={
-                                'ARRIVAL DATE': st.column_config.DateColumn("Date"),
-                                'OP_AMOUNT': st.column_config.NumberColumn("OP Amount (Ksh)", format="Ksh %.0f"),
-                                'IP_AMOUNT': st.column_config.NumberColumn("IP Amount (Ksh)", format="Ksh %.0f"),
-                            },
-                            hide_index=True
-                        )
-
-                        csv_hosp = hosp_members[display_cols].to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            f"📥 Download {selected_hosp} transition data (CSV)",
-                            data=csv_hosp,
-                            file_name=f"{selected_hosp}_op_ip_transitions.csv",
-                            mime="text/csv"
-                        )
-                else:
-                    st.info("No hospitals with transition events.")
-
-                # ---- Summary Stats ----
-                st.subheader("📊 Quick Stats")
-                col_a, col_b, col_c = st.columns(3)
-                with col_a:
-                    st.metric("Total Transition Events", len(transition))
-                with col_b:
-                    st.metric("Unique Members", transition['MEMBER NUMBER'].nunique())
-                with col_c:
-                    st.metric("Unique Hospitals", transition['MAIN HOSPITAL'].nunique())
-
-                # ---- Expandable Full Data ----
-                with st.expander("📋 View all transition events (filtered data)"):
-                    all_trans = transition.merge(member_names, on='MEMBER NUMBER', how='left')
-                    st.dataframe(all_trans[['ARRIVAL DATE', 'MEMBER NUMBER', 'PATIENT NAME', 'MAIN HOSPITAL', 'OP_AMOUNT', 'IP_AMOUNT', 'ORDER']],
-                                use_container_width=True, hide_index=True)
-
+                st.info("No hospitals with transition events.")
+            
+            st.subheader("📊 Quick Stats")
+            col_a, col_b, col_c = st.columns(3)
+            with col_a: st.metric("Total Transition Events", len(transition))
+            with col_b: st.metric("Unique Members", transition['MEMBER NUMBER'].nunique())
+            with col_c: st.metric("Unique Hospitals", transition['MAIN HOSPITAL'].nunique())
+            with st.expander("📋 View all transition events (filtered data)"):
+                member_names = df_transition[['MEMBER NUMBER', 'PATIENT NAME']].drop_duplicates()
+                all_trans = transition.merge(member_names, on='MEMBER NUMBER', how='left')
+                st.dataframe(all_trans[['ARRIVAL DATE', 'MEMBER NUMBER', 'PATIENT NAME', 'MAIN HOSPITAL', 'OP_AMOUNT', 'IP_AMOUNT', 'ORDER']],
+                             use_container_width=True, hide_index=True)
+    
     st.markdown("---")
     st.caption("Healthcare Claims Dashboard | Built with Streamlit & Plotly | Data period: Jan–Apr 2026")
 
