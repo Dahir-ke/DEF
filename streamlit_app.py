@@ -131,40 +131,20 @@ def dashboard():
             st.error(f"Failed to load data: {e}")
             st.stop()
     
-    # ORIGINAL CUSTOM CSS (with kpi-card styling preserved, and added responsive adjustments)
+    # Custom CSS (same as before)
     st.markdown("""
     <style>
         .stApp { background-color: #f5f9fc; }
         .css-1d391kg { background-color: #ffffff; border-right: 1px solid #e0e7ed; }
         .kpi-card {
-            background: white;
-            border-radius: 16px;
-            padding: 1rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            border: 1px solid #e9ecef;
+            background: white; border-radius: 16px; padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #e9ecef;
             text-align: center;
-            height: 100%;
         }
-        .kpi-label {
-            font-size: 0.85rem;
-            font-weight: 500;
-            color: #5a6e7c;
-            letter-spacing: 0.5px;
-        }
-        .kpi-value {
-            font-size: 1.9rem;
-            font-weight: 700;
-            color: #1f3b4c;
-            line-height: 1.2;
-        }
-        .kpi-delta {
-            font-size: 0.85rem;
-            margin-top: 4px;
-        }
-        .kpi-unit {
-            font-size: 0.85rem;
-            color: #7c8f9c;
-        }
+        .kpi-label { font-size: 0.85rem; font-weight: 500; color: #5a6e7c; letter-spacing: 0.5px; }
+        .kpi-value { font-size: 1.9rem; font-weight: 700; color: #1f3b4c; line-height: 1.2; }
+        .kpi-delta { font-size: 0.85rem; margin-top: 4px; }
+        .kpi-unit { font-size: 0.85rem; color: #7c8f9c; }
         h1, h2, h3 { color: #1a4a6e; font-weight: 600; }
         .stTabs [data-baseweb="tab-list"] {
             gap: 0.5rem; background-color: white; padding: 0.5rem 1rem;
@@ -177,15 +157,8 @@ def dashboard():
         .stTabs [aria-selected="true"] { background-color: #1a6f8c; color: white; }
         .stDataFrame { border-radius: 12px; overflow: hidden; }
         .block-container { padding-top: 1rem; }
-        /* Ensure cards are responsive and not cut off */
-        .row-widget.stHorizontalBlock {
-            flex-wrap: wrap;
-        }
     </style>
     """, unsafe_allow_html=True)
-    
-    # Optional: Add a dashboard title if you want (you can remove this line)
-    st.title("🏥 Healthcare Claims Analytics Dashboard")
     
     # ============================================
     # SIDEBAR FILTERS (unchanged)
@@ -248,7 +221,7 @@ def dashboard():
         )
     
     # ============================================
-    # APPLY FILTERS
+    # APPLY FILTERS (unchanged)
     # ============================================
     df_filtered = df.copy()
     if len(date_range) == 2:
@@ -266,9 +239,7 @@ def dashboard():
         st.sidebar.warning("No data matches filters. Showing all data.")
         df_filtered = df.copy()
     
-    # ============================================
-    # ORIGINAL KPI CARDS (fully restored)
-    # ============================================
+    # KPIs (unchanged)
     total_cost = df_filtered['AMOUNT'].sum()
     total_claims = df_filtered['CLAIM ID'].nunique()
     total_visits = df_filtered['VISIT_KEY'].nunique()
@@ -303,7 +274,7 @@ def dashboard():
     st.markdown("---")
     
     # ============================================
-    # TABS (all original content)
+    # TABS (all unchanged)
     # ============================================
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📊 Service & Benefit", "🏥 Provider Scorecard", "📈 Monthly Trends",

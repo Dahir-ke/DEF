@@ -13,114 +13,16 @@ warnings.filterwarnings('ignore')
 # ============================================
 # PAGE CONFIG
 # ============================================
-st.set_page_config(page_title="DEFMIS Healthcare Analytics", page_icon="🏥", layout="wide")
+st.set_page_config(page_title="Healthcare Claims Analytics", page_icon="🏥", layout="wide")
 
 # ============================================
-# GLOBAL CSS TO FORCE DARK TEXT EVERYWHERE
-# ============================================
-st.markdown("""
-<style>
-    /* Force all text in dataframes, tables, markdown, and subheaders to dark */
-    .stDataFrame, .stDataFrame div, .dataframe, .dataframe *,
-    .stTable, .stTable div, table, td, th, tr,
-    .stMarkdown, .stMarkdown *,
-    div[data-testid="stDataFrame"] *,
-    div[data-testid="stTable"] *,
-    h1, h2, h3, h4, h5, h6, .stSubheader,
-    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-        color: #1f3b4c !important;
-    }
-
-    /* Force metric cards dark */
-    div[data-testid="stMetric"] label, 
-    div[data-testid="stMetric"] div {
-        color: #1f3b4c !important;
-    }
-
-    /* SIDEBAR: all text dark, including markdown, labels, expander headers */
-    [data-testid="stSidebar"] .stMarkdown,
-    [data-testid="stSidebar"] .stMarkdown *,
-    [data-testid="stSidebar"] .st-emotion-cache-1v0mbdj,
-    [data-testid="stSidebar"] .st-emotion-cache-1wmy9hl,
-    [data-testid="stSidebar"] .st-expanderHeader,
-    [data-testid="stSidebar"] .st-expanderHeader *,
-    [data-testid="stSidebar"] .st-expanderContent,
-    [data-testid="stSidebar"] .st-expanderContent * {
-        color: #1f3b4c !important;
-    }
-
-    /* Ensure expander toggle icon is visible (dark) */
-    [data-testid="stSidebar"] .st-expanderHeader svg {
-        fill: #1f3b4c !important;
-        stroke: #1f3b4c !important;
-    }
-
-    /* Background */
-    .stApp { background-color: #f5f9fc; }
-    .css-1d391kg { background-color: #ffffff; border-right: 1px solid #e0e7ed; }
-
-    /* KPI cards ... (rest remains same) */
-    .kpi-card {
-        background: white;
-        border-radius: 16px;
-        padding: 1rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        border: 1px solid #e9ecef;
-        text-align: center;
-        height: 100%;
-    }
-    .kpi-label {
-        font-size: 0.85rem;
-        font-weight: 500;
-        color: #5a6e7c;
-        letter-spacing: 0.5px;
-    }
-    .kpi-value {
-        font-size: 1.9rem;
-        font-weight: 700;
-        color: #1f3b4c;
-        line-height: 1.2;
-    }
-    .kpi-delta {
-        font-size: 0.85rem;
-        margin-top: 4px;
-    }
-    .kpi-unit {
-        font-size: 0.85rem;
-        color: #7c8f9c;
-    }
-
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0.5rem; background-color: white; padding: 0.5rem 1rem;
-        border-radius: 40px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 30px; padding: 0.5rem 1.2rem; font-weight: 500;
-        color: #2c5a7a; background-color: #f0f4f8;
-    }
-    .stTabs [aria-selected="true"] { background-color: #1a6f8c; color: white; }
-
-    /* Insight box */
-    .insight-box {
-        background-color: #e8f4f8;
-        border-left: 5px solid #1a6f8c;
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        color: #1f3b4c !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ============================================
-# SESSION STATE
+# SESSION STATE FOR AUTHENTICATION
 # ============================================
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
 # ============================================
-# LOGIN PAGE
+# LOGIN PAGE (unchanged)
 # ============================================
 def show_login():
     st.markdown("""
@@ -164,10 +66,11 @@ def show_login():
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================
-# DATA LOADING (with age columns recomputed)
+# DATA LOADING (with age brackets)
 # ============================================
 @st.cache_data
 def load_data(filepath):
+    """Load CSV safely and cache as Parquet, with age brackets computed."""
     csv_path = Path(filepath)
     parquet_path = csv_path.with_suffix('.parquet')
     
@@ -187,7 +90,6 @@ def load_data(filepath):
         
         for col in ['ARRIVAL DATE', 'TRANSACTION DATE', 'DOB']:
             df[col] = pd.to_datetime(df[col], errors='coerce')
-        
         df['AMOUNT'] = pd.to_numeric(df['AMOUNT'], errors='coerce')
         df = df.dropna(subset=['AMOUNT', 'ARRIVAL DATE', 'MEMBER NUMBER'])
         df['VISIT_KEY'] = (df['MEMBER NUMBER'].astype(str) + '_' +
@@ -195,7 +97,7 @@ def load_data(filepath):
                            df['SERVICE TYPE'].astype(str))
         df.to_parquet(parquet_path, compression='snappy')
     
-    # Always recompute age columns (ensures they exist)
+    # Recompute age columns
     df['DOB'] = pd.to_datetime(df['DOB'], errors='coerce')
     df['AGE_AT_VISIT'] = (df['ARRIVAL DATE'] - df['DOB']).dt.days // 365
     df['AGE_AT_VISIT'] = df['AGE_AT_VISIT'].clip(0, 120)
@@ -204,13 +106,10 @@ def load_data(filepath):
     df['AGE_BRACKET'] = pd.cut(df['AGE_AT_VISIT'], bins=bins, labels=labels, right=True)
     return df
 
-# ============================================
-# DASHBOARD MAIN FUNCTION
-# ============================================
 def dashboard():
     DATA_PATH = "data/visit_for_jan_to_end_of_May.csv"
     
-    with st.spinner("Loading data..."):
+    with st.spinner("Loading and optimizing data... first load may take a few seconds."):
         try:
             df = load_data(DATA_PATH)
             st.sidebar.success(f"✅ Loaded {df.shape[0]:,} rows")
@@ -218,59 +117,146 @@ def dashboard():
             st.error(f"Failed to load data: {e}")
             st.stop()
     
-    st.title("🏥 DEFMIS Healthcare Claims Dashboard")
-    st.markdown("---")
+    # ============================================
+    # GLOBAL CSS (force dark text + new white‑text class for branch info)
+    # ============================================
+    st.markdown("""
+    <style>
+        /* Force all text dark (unchanged) */
+        .stDataFrame, .stDataFrame div, .dataframe, .dataframe *,
+        .stTable, .stTable div, table, td, th, tr,
+        .stMarkdown, .stMarkdown *,
+        div[data-testid="stDataFrame"] *,
+        div[data-testid="stTable"] *,
+        h1, h2, h3, h4, h5, h6, .stSubheader,
+        .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+            color: #1f3b4c !important;
+        }
+        div[data-testid="stMetric"] label, 
+        div[data-testid="stMetric"] div {
+            color: #1f3b4c !important;
+        }
+        [data-testid="stSidebar"] .stMarkdown,
+        [data-testid="stSidebar"] .stMarkdown *,
+        [data-testid="stSidebar"] .st-emotion-cache-1v0mbdj,
+        [data-testid="stSidebar"] .st-emotion-cache-1wmy9hl,
+        [data-testid="stSidebar"] .st-expanderHeader,
+        [data-testid="stSidebar"] .st-expanderHeader *,
+        [data-testid="stSidebar"] .st-expanderContent,
+        [data-testid="stSidebar"] .st-expanderContent * {
+            color: #1f3b4c !important;
+        }
+        [data-testid="stSidebar"] .st-expanderHeader svg {
+            fill: #1f3b4c !important;
+            stroke: #1f3b4c !important;
+        }
+
+        /* New class for white text (used on branch info) */
+        .branch-white {
+            color: white !important;
+        }
+
+        .stApp { background-color: #f5f9fc; }
+        .css-1d391kg { background-color: #ffffff; border-right: 1px solid #e0e7ed; }
+        .kpi-card {
+            background: white; border-radius: 16px; padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #e9ecef;
+            text-align: center;
+        }
+        .kpi-label { font-size: 0.85rem; font-weight: 500; color: #5a6e7c; letter-spacing: 0.5px; }
+        .kpi-value { font-size: 1.9rem; font-weight: 700; color: #1f3b4c; line-height: 1.2; }
+        .kpi-delta { font-size: 0.85rem; margin-top: 4px; }
+        .kpi-unit { font-size: 0.85rem; color: #7c8f9c; }
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.5rem; background-color: white; padding: 0.5rem 1rem;
+            border-radius: 40px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .stTabs [data-baseweb="tab"] {
+            border-radius: 30px; padding: 0.5rem 1.2rem; font-weight: 500;
+            color: #2c5a7a; background-color: #f0f4f8;
+        }
+        .stTabs [aria-selected="true"] { background-color: #1a6f8c; color: white; }
+        .insight-box {
+            background-color: #e8f4f8;
+            border-left: 5px solid #1a6f8c;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            color: #1f3b4c !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
     
-    # Sidebar filters
+    # ============================================
+    # SIDEBAR FILTERS
+    # ============================================
     st.sidebar.title("🎛️ Dashboard Filters")
+    
     min_date = df['TRANSACTION DATE'].min().date()
     max_date = df['TRANSACTION DATE'].max().date()
     date_range = st.sidebar.date_input("Transaction Date Range", [min_date, max_date],
                                         min_value=min_date, max_value=max_date)
+    
     all_services = df['SERVICE TYPE'].dropna().unique().tolist()
     selected_services = st.sidebar.multiselect("Service Type", all_services, default=all_services)
-    all_main_hospitals = sorted(df['MAIN HOSPITAL'].dropna().unique().tolist())
-    selected_main_hospitals = st.sidebar.multiselect("Main Hospital (Group)", options=all_main_hospitals, default=[])
     
-    # ============================================
-    # NEW: BRANCH HELPER – shows number of branches (distinct PROVIDER NAME)
-    # for each selected main hospital, plus a "See branches" expander
-    # ============================================
+    all_main_hospitals = sorted(df['MAIN HOSPITAL'].dropna().unique().tolist())
+    selected_main_hospitals = st.sidebar.multiselect(
+        "Main Hospital (Group)",
+        options=all_main_hospitals,
+        default=[],
+        help="Select one or more main hospitals. Branches will be filtered accordingly."
+    )
+    
+    # Branch helper – now with white text
     if selected_main_hospitals and 'PROVIDER NAME' in df.columns:
         st.sidebar.markdown("---")
-        st.sidebar.markdown("🏥 **Branch Information**")
+        st.sidebar.markdown('<span class="branch-white">🏥 **Branch Information**</span>', unsafe_allow_html=True)
         branch_data = df[df['MAIN HOSPITAL'].isin(selected_main_hospitals)]
         if not branch_data.empty:
-            # Count distinct provider names (branches) per main hospital
             branch_counts = branch_data.groupby('MAIN HOSPITAL')['PROVIDER NAME'].nunique()
             for hosp in selected_main_hospitals:
                 count = branch_counts.get(hosp, 0)
-                st.sidebar.markdown(f"• **{hosp}** has **{count}** branch(es).")
+                st.sidebar.markdown(f'<span class="branch-white">• **{hosp}** has **{count}** branch(es).</span>', unsafe_allow_html=True)
             
-            # "See branches" expander that lists branch names per hospital
             with st.sidebar.expander("🔍 See branches"):
                 for hosp in selected_main_hospitals:
                     branches = branch_data[branch_data['MAIN HOSPITAL'] == hosp]['PROVIDER NAME'].dropna().unique()
                     if len(branches) > 0:
-                        st.markdown(f"**{hosp}** ({len(branches)} branches):")
+                        st.sidebar.markdown(f'<span class="branch-white">**{hosp}** ({len(branches)} branches):</span>', unsafe_allow_html=True)
                         for b in sorted(branches):
-                            st.markdown(f"- {b}")
+                            st.sidebar.markdown(f'<span class="branch-white">- {b}</span>', unsafe_allow_html=True)
                     else:
-                        st.markdown(f"**{hosp}**: No branch data available.")
+                        st.sidebar.markdown(f'<span class="branch-white">**{hosp}**: No branch data available.</span>', unsafe_allow_html=True)
             st.sidebar.markdown("---")
     
-    # Provider filter (branch level) – depends on selected main hospitals
     if 'PROVIDER NAME' not in df.columns:
         selected_providers = []
+        provider_options = []
     else:
         if selected_main_hospitals:
             provider_mask = df['MAIN HOSPITAL'].isin(selected_main_hospitals)
             provider_options = sorted(df.loc[provider_mask, 'PROVIDER NAME'].dropna().unique().tolist())
         else:
             provider_options = sorted(df['PROVIDER NAME'].dropna().unique().tolist())
-        selected_providers = st.sidebar.multiselect("Provider Name (Branch)", options=provider_options, default=[])
+        selected_providers = st.sidebar.multiselect(
+            "Provider Name (Branch)",
+            options=provider_options,
+            default=[],
+            help="Select specific branches. If none selected, all branches under the chosen main hospitals are included."
+        )
     
-    # Apply filters
+    # ============================================
+    # LOGOUT BUTTON (added)
+    # ============================================
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🚪 Logout", use_container_width=True):
+        st.session_state.authenticated = False
+        st.rerun()
+    
+    # ============================================
+    # APPLY FILTERS
+    # ============================================
     df_filtered = df.copy()
     if len(date_range) == 2:
         start, end = date_range
@@ -284,10 +270,10 @@ def dashboard():
         df_filtered = df_filtered[df_filtered['PROVIDER NAME'].isin(selected_providers)]
     
     if df_filtered.empty:
-        st.warning("No data matches filters. Showing all data.")
+        st.sidebar.warning("No data matches filters. Showing all data.")
         df_filtered = df.copy()
     
-    # KPI Metrics
+    # KPIs (unchanged)
     total_cost = df_filtered['AMOUNT'].sum()
     total_claims = df_filtered['CLAIM ID'].nunique()
     total_visits = df_filtered['VISIT_KEY'].nunique()
@@ -295,7 +281,10 @@ def dashboard():
     ip_pct = (ip_amount / total_cost * 100) if total_cost > 0 else 0
     
     monthly_total = df_filtered.groupby(df_filtered['TRANSACTION DATE'].dt.to_period('M'))['AMOUNT'].sum()
-    amount_mom = ((monthly_total.iloc[-1] - monthly_total.iloc[-2]) / monthly_total.iloc[-2] * 100) if len(monthly_total) >= 2 else 0
+    if len(monthly_total) >= 2:
+        amount_mom = (monthly_total.iloc[-1] - monthly_total.iloc[-2]) / monthly_total.iloc[-2] * 100
+    else:
+        amount_mom = 0
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -318,13 +307,15 @@ def dashboard():
     
     st.markdown("---")
     
-    # REDUCED TABS: only 6 tabs (removed Outlier Detection & Retention)
+    # ============================================
+    # TABS (all unchanged from merged code)
+    # ============================================
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 Service & Benefit", "🏥 Provider Scorecard", "📈 Monthly Trends",
         "👶 Age Analysis", "🔍 Member Lookup", "🔄 OP‑IP Transitions"
     ])
     
-    # ----- TAB 1: Service & Benefit (unchanged) -----
+    # TAB 1 – Service & Benefit
     with tab1:
         st.subheader("Service Type Breakdown")
         service_agg = df_filtered.groupby('SERVICE TYPE').agg(TOTAL=('AMOUNT', 'sum'), VISITS=('VISIT_KEY', 'nunique')).reset_index()
@@ -342,7 +333,7 @@ def dashboard():
         benefit['Visits'] = benefit['Visits'].apply(lambda x: f'{x:,}')
         st.dataframe(benefit, use_container_width=True, hide_index=True)
     
-    # ----- TAB 2: Provider Scorecard (unchanged) -----
+    # TAB 2 – Provider Scorecard
     with tab2:
         st.subheader("🏥 Provider Efficiency Scorecard")
         provider = df_filtered.groupby('MAIN HOSPITAL').agg(
@@ -396,7 +387,7 @@ def dashboard():
         fig_eff.update_traces(marker=dict(line=dict(width=1, color='white')))
         st.plotly_chart(fig_eff, use_container_width=True)
     
-    # ----- TAB 3: Monthly Trends (unchanged) -----
+    # TAB 3 – Monthly Trends
     with tab3:
         st.subheader("Monthly Performance with MoM Changes")
         monthly = df_filtered.groupby(df_filtered['TRANSACTION DATE'].dt.to_period('M')).agg(
@@ -425,7 +416,7 @@ def dashboard():
         else:
             st.info("Not enough months to calculate MoM changes.")
     
-    # ----- TAB 4: AGE ANALYSIS (optimized with fixed bar overflow) -----
+    # TAB 4 – Age Analysis (white text class not needed here, already dark)
     with tab4:
         st.subheader("👶 Age Bracket Analysis")
         st.markdown("""
@@ -494,7 +485,7 @@ def dashboard():
         </div>
         """, unsafe_allow_html=True)
     
-    # ----- TAB 5: Member Lookup (unchanged) -----
+    # TAB 5 – Member Lookup
     with tab5:
         st.subheader("Member Lookup")
         search_term = st.text_input("Enter Member Number or Patient Name")
@@ -514,7 +505,7 @@ def dashboard():
             else:
                 st.warning("No matching member found.")
     
-    # ----- TAB 6: OP-IP Transitions (unchanged) -----
+    # TAB 6 – OP‑IP Transitions
     with tab6:
         st.subheader("Same‑Day Outpatient → Inpatient Transitions")
         st.markdown("""
@@ -593,7 +584,7 @@ def dashboard():
                              use_container_width=True, hide_index=True)
     
     st.markdown("---")
-    st.caption("DEFMIS Healthcare Claims Dashboard | Built with Streamlit & Plotly | Data period: Jan–May 2026")
+    st.caption("Healthcare Claims Dashboard | Built with Streamlit & Plotly | Data period: Jan–May 2026")
 
 # ============================================
 # ROUTING
