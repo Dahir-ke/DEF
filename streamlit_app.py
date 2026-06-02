@@ -66,19 +66,20 @@ def show_login():
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================
-# ROBUST DATA LOADING (FIXED FOR 'OTHER NUMBER' ERROR)
+# ROBUST DATA LOADING (CSV VERSION)
 # ============================================
 @st.cache_data
 def load_data(filepath):
-    """Load Excel safely by reading all columns as strings, then convert needed columns."""
-    parquet_path = Path(filepath).with_suffix('.parquet')
+    """Load CSV safely by reading all columns as strings, then convert needed columns."""
+    csv_path = Path(filepath)
+    parquet_path = csv_path.with_suffix('.parquet')
     
-    # If Parquet cache exists and is newer than Excel, use it
-    if parquet_path.exists() and os.path.getmtime(parquet_path) > os.path.getmtime(filepath):
+    # If Parquet cache exists and is newer than CSV, use it
+    if parquet_path.exists() and os.path.getmtime(parquet_path) > os.path.getmtime(csv_path):
         df = pd.read_parquet(parquet_path)
     else:
         # Read everything as string to avoid conversion errors (e.g., 'OTHER NUMBER' column)
-        df = pd.read_excel(filepath, dtype=str)
+        df = pd.read_csv(csv_path, dtype=str, encoding='utf-8')
         df.columns = df.columns.str.strip()
         
         required = ['CLAIM ID', 'MEMBER NUMBER', 'PATIENT NAME', 'SERVICE TYPE',
@@ -119,7 +120,8 @@ def load_data(filepath):
     return df
 
 def dashboard():
-    DATA_PATH = "data\visit_for_jan_to_end_of_May.csv"
+    # --- UPDATED DATA PATH ---
+    DATA_PATH = "data/visit_for_jan_to_end_of_May.csv"
     
     with st.spinner("Loading and optimizing data... first load may take a few seconds."):
         try:
@@ -272,7 +274,7 @@ def dashboard():
     st.markdown("---")
     
     # ============================================
-    # TABS (all unchanged - exactly as in original)
+    # TABS (all unchanged)
     # ============================================
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📊 Service & Benefit", "🏥 Provider Scorecard", "📈 Monthly Trends",
@@ -518,7 +520,7 @@ def dashboard():
                              use_container_width=True, hide_index=True)
     
     st.markdown("---")
-    st.caption("Healthcare Claims Dashboard | Built with Streamlit & Plotly | Data period: Jan–Apr 2026")
+    st.caption("Healthcare Claims Dashboard | Built with Streamlit & Plotly | Data period: Jan–May 2026")
 
 # ============================================
 # ROUTING
