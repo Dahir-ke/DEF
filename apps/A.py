@@ -107,7 +107,7 @@ def load_data(filepath):
     return df
 
 def dashboard():
-    DATA_PATH = "data/visit_for_jan_to_end_of_May.csv"
+    DATA_PATH = "data/visit_for_jan_to_mid_june_2026.csv"
     
     with st.spinner("Loading and optimizing data... first load may take a few seconds."):
         try:
@@ -130,11 +130,11 @@ def dashboard():
         div[data-testid="stTable"] *,
         h1, h2, h3, h4, h5, h6, .stSubheader,
         .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-            color: #1f3b4c !important;
+            color: #1f3b4c ;
         }
         div[data-testid="stMetric"] label, 
         div[data-testid="stMetric"] div {
-            color: #1f3b4c !important;
+            color: #1f3b4c ;
         }
         [data-testid="stSidebar"] .stMarkdown,
         [data-testid="stSidebar"] .stMarkdown *,
@@ -144,16 +144,16 @@ def dashboard():
         [data-testid="stSidebar"] .st-expanderHeader *,
         [data-testid="stSidebar"] .st-expanderContent,
         [data-testid="stSidebar"] .st-expanderContent * {
-            color: #1f3b4c !important;
+            color: #1f3b4c;
         }
         [data-testid="stSidebar"] .st-expanderHeader svg {
-            fill: #1f3b4c !important;
-            stroke: #1f3b4c !important;
+            fill: #1f3b4c;
+            stroke: #1f3b4c;
         }
 
         /* New class for white text (used on branch info) */
         .branch-white {
-            color: white !important;
+            color: white;
         }
 
         .stApp { background-color: #f5f9fc; }
