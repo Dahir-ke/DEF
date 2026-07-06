@@ -121,7 +121,7 @@ def load_data(filepath):
 
 def dashboard():
     # --- UPDATED DATA PATH ---
-    DATA_PATH = "data/visit_for_jan_to_mid_june_2026.csv"
+    DATA_PATH = "data/JAN-JUNE_DATA.csv"
   
  
     with st.spinner("Loading and optimizing data... first load may take a few seconds."):
